@@ -1,0 +1,39 @@
+# Copie para ~/.config/lingo/config.toml e mude só o que precisar.
+
+[languages]
+mode = "translate"       # "translate": call em inglês, traduzida; "native": call em português (Ctrl+T troca)
+call = "en"              # idioma que os outros falam
+translate_to = "pt-BR"   # idioma da tradução e do modo "native"
+reply_in = "en"          # idioma das respostas sugeridas
+my_names = ["Pedro"]     # falar o seu nome também dispara sugestões
+# nomes, siglas e jargão que a transcrição deve acertar; acrescente o que ele errar
+keywords = ["UAT", "PRD", "pipeline", "merge", "PR", "Event Hub", "Kubernetes", "pod"]
+
+[models]
+transcribe = "gpt-live-transcribe"   # os outros, ao vivo; gpt-4o-mini-transcribe custa ~6x menos mas só mostra a frase quando a pessoa para
+transcribe_delay = "high"            # gpt-live-transcribe: minimal (mais rápido) … low, medium, high, xhigh (mais preciso)
+mic = "gpt-4o-transcribe"            # o seu microfone; gpt-4o-mini-transcribe custa metade e erra o dobro
+translate = "gpt-realtime-translate"  # português ~2 s atrás da fala; "gpt-5.4-mini" = frase a frase, metade do custo
+notes = "gpt-5.4-mini"                # notas de expressões quando a tradução é ao vivo
+suggest = "gpt-5.4-mini"
+
+[audio]
+capture_mic = true       # transcrever o seu microfone (dá contexto às sugestões)
+they_target = ""         # vazio = saída padrão do sistema; ou o nome de um sink do PipeWire
+mic_target = ""          # vazio = microfone padrão
+speech_level = 0.003     # volume (RMS 0..1) que conta como voz; baixe se a call estiver baixa
+commit_ms = 700          # silêncio que fecha uma fala dos outros
+vad_silence_ms = 500     # silêncio que fecha uma fala sua (VAD do servidor)
+vad_threshold = 0.5
+
+[suggestions]
+auto = true              # sugerir sozinho quando fizerem uma pergunta
+delay_s = 0.5            # espera depois da última frase antes de sugerir (com "?" sugere na hora)
+context_lines = 14       # quantas falas recentes vão como contexto
+
+[ask]
+command = ""             # vazio = `claude` do PATH ou de ~/.local/bin
+cwd = "~"                # de onde o Claude Code roda; a memória dele é por pasta
+
+[misc]
+save_transcripts = false # true grava cada call em ~/.local/share/lingo/sessions/

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Lingo
+Comment=Tradução ao vivo e sugestões de resposta em calls
+Exec=@LINGO@
+Icon=accessories-dictionary
+Terminal=false
+Type=Application
+Categories=Utility;AudioVideo;
+StartupWMClass=dev.pedro.Lingo

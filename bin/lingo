@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# Abre o Lingo (ou manda um comando para a instância aberta: lingo --help).
+# Cache de fontconfig isolado: o Edge grava cache-12 em ~/.cache/fontconfig e
+# isso deixa o texto errado/invisível em apps com fontconfig mais antigo.
+set -euo pipefail
+root="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+export XDG_CACHE_HOME="${LINGO_CACHE_HOME:-$HOME/.cache/lingo}"
+export PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}"
+exec /usr/bin/python3 -m lingo "$@"

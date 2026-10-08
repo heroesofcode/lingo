@@ -1,0 +1,17 @@
+# Lingo: gerado por tools/install.sh (pode editar à vontade)
+
+# Janela flutuante, fixa em todas as workspaces, no canto superior direito.
+windowrule {
+    name = lingo-overlay
+    match:class = ^(dev\.pedro\.Lingo)$
+
+    float = yes
+    pin = yes
+    size = 470 820
+    move = monitor_w-490 50
+}
+
+bind = $mainMod ALT, L, exec, @LINGO@ --toggle
+bind = $mainMod ALT, R, exec, @LINGO@ --suggest
+bind = $mainMod ALT, P, exec, @LINGO@ --pause
+bind = $mainMod ALT, A, exec, @LINGO@ --ask
