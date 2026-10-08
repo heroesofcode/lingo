@@ -15,6 +15,33 @@ use crate::engine::{Command, EngineHandle, Event, Origin, Speaker};
 use crate::realtime::Status;
 
 const MAX_ROWS: usize = 300;
+/// below this width the top bar gets compact
+const COMPACT_BELOW: i32 = 460;
+/// from this width on, the panels and the text field move to a column on the right
+const WIDE_FROM: i32 = 900;
+/// widest the conversation text gets, so lines stay readable on very wide windows
+const MAX_FEED: i32 = 1000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    Compact,
+    Normal,
+    Wide,
+}
+
+fn layout_for(width: i32) -> Layout {
+    if width < COMPACT_BELOW {
+        Layout::Compact
+    } else if width < WIDE_FROM {
+        Layout::Normal
+    } else {
+        Layout::Wide
+    }
+}
+
+fn side_width(width: i32) -> i32 {
+    ((width as f64 * 0.38).round() as i32).clamp(380, 560)
+}
 
 fn empty_text(mode: Mode) -> &'static str {
     match mode {
@@ -42,6 +69,12 @@ pub struct Window {
     toast_source: RefCell<Option<glib::SourceId>>,
     syncing: Cell<bool>,
     feed: gtk::Box,
+    body: gtk::Box,
+    side: gtk::Box,
+    side_scroller: gtk::ScrolledWindow,
+    side_hint: gtk::Label,
+    layout: Cell<Option<Layout>>,
+    size: Cell<(i32, i32)>,
     empty: gtk::Label,
     ask_panel: AskPanel,
     panel: SuggestionPanel,
@@ -92,7 +125,7 @@ impl Window {
             let win = gtk::ApplicationWindow::builder()
                 .application(app)
                 .title("Lingo")
-                .default_width(460)
+                .default_width(960)
                 .default_height(780)
                 .build();
             win.add_css_class("lingo");
@@ -107,9 +140,8 @@ impl Window {
             let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
             overlay.set_child(Some(&root));
 
-            // The bar fits in the 470 px of the Hyprland rule. If a text asked for more width, even for an
-            // instant ("Conectando…"), Hyprland would widen the window past the screen edge and never narrow
-            // it back; that is why the texts that change shrink with an ellipsis instead.
+            // Texts that change length shrink with an ellipsis instead of widening the window: Hyprland grows a
+            // floating window to its minimum width (past the screen edge, if need be) and never narrows it back.
             let bar = gtk::Box::new(gtk::Orientation::Horizontal, 3);
             bar.add_css_class("topbar");
             let dot = label("●", &["dot"], false);
@@ -161,8 +193,11 @@ impl Window {
             }
             root.append(&bar);
 
-            let scroller =
-                gtk::ScrolledWindow::builder().vexpand(true).hscrollbar_policy(gtk::PolicyType::Never).build();
+            let scroller = gtk::ScrolledWindow::builder()
+                .hexpand(true)
+                .vexpand(true)
+                .hscrollbar_policy(gtk::PolicyType::Never)
+                .build();
             let feed = gtk::Box::new(gtk::Orientation::Vertical, 0);
             feed.add_css_class("feed");
             let empty = label("", &["empty"], true);
@@ -170,10 +205,37 @@ impl Window {
             empty.set_xalign(0.5);
             feed.append(&empty);
             scroller.set_child(Some(&feed));
-            root.append(&scroller);
+            // Below the conversation or, on wide windows, in a column to its right: the panels and the text field.
+            let body = gtk::Box::builder().orientation(gtk::Orientation::Vertical).vexpand(true).build();
+            body.append(&scroller);
+            root.append(&body);
+            let side = gtk::Box::new(gtk::Orientation::Vertical, 0);
+            side.add_css_class("side");
+            // the text field expands, and GTK would pass that on to the column, which would then split the extra
+            // width with the conversation instead of keeping the width apply_size gives it
+            side.set_hexpand(false);
+            // Automatic, not Never: with Never the column would take on the natural width of the panels' long
+            // texts and squeeze the conversation; this way it keeps exactly the width apply_size gives it.
+            let side_scroller = gtk::ScrolledWindow::builder()
+                .hscrollbar_policy(gtk::PolicyType::Automatic)
+                .propagate_natural_height(true)
+                .build();
+            let panels = gtk::Box::new(gtk::Orientation::Vertical, 0);
+            let side_hint = label(
+                "As respostas sugeridas e as do Claude aparecem aqui.\nClique numa fala ou use Ctrl+R.",
+                &["side-hint"],
+                true,
+            );
+            side_hint.set_justify(gtk::Justification::Center);
+            side_hint.set_xalign(0.5);
+            side_hint.set_visible(false);
+            panels.append(&side_hint);
+            side_scroller.set_child(Some(&panels));
+            side.append(&side_scroller);
+            body.append(&side);
 
             let ask_panel = AskPanel::new();
-            root.append(&ask_panel.root);
+            panels.append(&ask_panel.root);
             let copy = {
                 let me = me.clone();
                 move |text: String| {
@@ -183,13 +245,17 @@ impl Window {
                 }
             };
             let panel = SuggestionPanel::new(Rc::new(copy));
-            root.append(&panel.root);
+            panels.append(&panel.root);
+            for root in [&panel.root, &ask_panel.root] {
+                let refresh = with_window(me, Window::refresh_side_hint);
+                root.connect_visible_notify(move |_| refresh());
+            }
 
             let composer = gtk::Box::new(gtk::Orientation::Horizontal, 0);
             composer.add_css_class("composer");
             let entry = gtk::Entry::builder().hexpand(true).build();
             composer.append(&entry);
-            root.append(&composer);
+            side.append(&composer);
 
             let toast = label("", &["toast"], true);
             toast.set_halign(gtk::Align::Center);
@@ -197,6 +263,21 @@ impl Window {
             toast.set_visible(false);
             toast.set_can_target(false);
             overlay.add_overlay(&toast);
+            // An invisible layer over the whole window, only to learn its size.
+            let probe = gtk::DrawingArea::builder().can_target(false).build();
+            probe.connect_resize({
+                let me = me.clone();
+                move |_, width, height| {
+                    // changing the layout during the size allocation itself would make GTK warn
+                    let me = me.clone();
+                    glib::idle_add_local_once(move || {
+                        if let Some(window) = me.upgrade() {
+                            window.apply_size(width, height);
+                        }
+                    });
+                }
+            });
+            overlay.add_overlay(&probe);
 
             let adj = scroller.vadjustment();
             adj.connect_value_changed({
@@ -259,6 +340,12 @@ impl Window {
                 toast_source: RefCell::new(None),
                 syncing: Cell::new(false),
                 feed,
+                body,
+                side,
+                side_scroller,
+                side_hint,
+                layout: Cell::new(None),
+                size: Cell::new((0, 0)),
                 empty,
                 ask_panel,
                 panel,
@@ -335,6 +422,50 @@ impl Window {
 
     pub fn toggle_mode(&self) {
         self.engine.send(Command::SetMode(self.mode.get().toggled()));
+    }
+
+    fn apply_size(&self, width: i32, height: i32) {
+        if (width, height) == self.size.get() {
+            return;
+        }
+        self.size.set((width, height));
+        let layout = layout_for(width);
+        let wide = layout == Layout::Wide;
+        let side = if wide { side_width(width) } else { -1 };
+        self.side.set_size_request(side, -1);
+        // stacked under the conversation, the panels take at most half the height and scroll beyond that
+        self.side_scroller.set_max_content_height(if wide { -1 } else { height / 2 });
+        let feed = if wide { width - side } else { width };
+        let margin = ((feed - MAX_FEED) / 2).max(0);
+        self.feed.set_margin_start(margin);
+        self.feed.set_margin_end(margin);
+        if self.layout.get() == Some(layout) {
+            return;
+        }
+        self.layout.set(Some(layout));
+        let compact = layout == Layout::Compact;
+        self.status_label.set_visible(!compact);
+        self.usage.set_visible(!compact);
+        self.body.set_orientation(if wide { gtk::Orientation::Horizontal } else { gtk::Orientation::Vertical });
+        self.side_scroller.set_vexpand(wide);
+        if wide {
+            self.side.add_css_class("wide");
+        } else {
+            self.side.remove_css_class("wide");
+        }
+        self.refresh_side_hint();
+    }
+
+    fn refresh_side_hint(&self) {
+        let empty = !self.panel.root.is_visible() && !self.ask_panel.root.is_visible();
+        self.side_hint.set_visible(self.layout.get() == Some(Layout::Wide) && empty);
+    }
+
+    /// In the compact layout the status text and the cost are hidden; the dot's tooltip still has them.
+    fn refresh_dot_tooltip(&self) {
+        let (status, usage) = (self.status_label.label(), self.usage.label());
+        let text = if usage.is_empty() { status.to_string() } else { format!("{status} · {usage}") };
+        self.dot.set_tooltip_text(Some(&text));
     }
 
     fn close_panels(&self) {
@@ -475,6 +606,7 @@ impl Window {
         }
         self.dot.add_css_class(class);
         self.status_label.set_label(text);
+        self.refresh_dot_tooltip();
     }
 
     pub fn dispatch(&self, ev: Event) {
@@ -527,6 +659,7 @@ impl Window {
                 self.usage.set_label(&format!("US$ {usd:.2}").replace('.', ","));
                 let tooltip = format!("{minutes} min de áudio enviados · custo estimado da transcrição e da tradução");
                 self.usage.set_tooltip_text(Some(&tooltip.replace('.', ",")));
+                self.refresh_dot_tooltip();
             }
             Event::Paused(paused) => {
                 self.set_toggle(&self.pause_btn, paused);
