@@ -170,7 +170,7 @@ Rust, with GTK4 ([gtk4-rs](https://gtk-rs.org)) on the main thread and the engin
 | `src/ask.rs` | questions to Claude Code |
 | `src/ui/` | the window and the command line |
 
-The first version, in Python, is on the `python` branch.
+The first version, in Python, is the repository's first commit (`52a9e3e`).
 
 ## Tests
 
