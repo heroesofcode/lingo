@@ -1,4 +1,4 @@
-//! Cliente mínimo de Chat Completions com streaming.
+//! Minimal Chat Completions client with streaming.
 
 use std::time::Duration;
 
@@ -38,7 +38,7 @@ impl Chat {
         body
     }
 
-    /// Chama `on_piece` com cada pedaço do texto, conforme chega.
+    /// Calls `on_piece` with each piece of the text as it arrives.
     pub async fn stream(
         &self,
         model: &str,
@@ -61,7 +61,7 @@ impl Chat {
             let status = resp.status();
             if !status.is_success() {
                 let detail: String = resp.text().await.unwrap_or_default().chars().take(300).collect();
-                // modelo que não aceita reasoning_effort "none": tenta de novo sem
+                // a model that rejects reasoning_effort "none": try again without it
                 if status == StatusCode::BAD_REQUEST && detail.contains("reasoning_effort") && reasoning {
                     reasoning = false;
                     continue;

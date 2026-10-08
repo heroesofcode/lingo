@@ -1,4 +1,4 @@
-//! Configuração: padrões + `~/.config/lingo/config.toml` + chave da OpenAI.
+//! Configuration: defaults + `~/.config/lingo/config.toml` + the OpenAI key.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -37,7 +37,7 @@ pub fn config_file() -> PathBuf {
     std::env::var_os("LINGO_CONFIG").map(PathBuf::from).unwrap_or_else(|| config_dir().join("config.toml"))
 }
 
-/// `~/x` → `/home/voce/x`.
+/// `~/x` → `/home/you/x`.
 pub fn expand_home(path: &str) -> PathBuf {
     match path.strip_prefix('~') {
         Some(rest) if rest.is_empty() || rest.starts_with('/') => home().join(rest.trim_start_matches('/')),
@@ -47,23 +47,23 @@ pub fn expand_home(path: &str) -> PathBuf {
 
 static CACHE_HOME_BEFORE: OnceLock<Option<OsString>> = OnceLock::new();
 
-/// Cache de fontconfig só do Lingo: o Edge grava em `~/.cache/fontconfig` um cache em formato
-/// novo que deixa o texto errado ou invisível em apps com fontconfig mais antigo.
+/// A fontconfig cache just for Lingo: Edge writes a cache in a newer format to `~/.cache/fontconfig`
+/// that makes text wrong or invisible in apps with an older fontconfig.
 pub fn isolate_font_cache() {
     let dir = std::env::var_os("LINGO_CACHE_HOME").map(PathBuf::from).unwrap_or_else(|| home().join(".cache/lingo"));
     CACHE_HOME_BEFORE.set(std::env::var_os("XDG_CACHE_HOME")).ok();
-    // SAFETY: roda no começo do main, antes de existir qualquer outra thread.
+    // SAFETY: runs at the start of main, before any other thread exists.
     unsafe { std::env::set_var("XDG_CACHE_HOME", dir) };
 }
 
-/// O `XDG_CACHE_HOME` de antes de `isolate_font_cache` (para devolvê-lo aos programas que o Lingo
-/// abre). `None` quando o cache não foi isolado.
+/// `XDG_CACHE_HOME` as it was before `isolate_font_cache` (to hand back to the programs Lingo
+/// starts). `None` when the cache was not isolated.
 pub fn cache_home_before_isolation() -> Option<Option<OsString>> {
     CACHE_HOME_BEFORE.get().cloned()
 }
 
-/// `Translate`: a call é em outro idioma e a fala dos outros é traduzida.
-/// `Native`: a call é no seu idioma; só transcreve, sem tradução.
+/// `Translate`: the call is in another language and what the others say is translated.
+/// `Native`: the call is in your language; it only transcribes, without translation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     Translate,
@@ -102,13 +102,13 @@ pub struct Config {
 #[serde(default)]
 pub struct Languages {
     pub mode: String,
-    /// o que os outros falam
+    /// what the others speak
     pub call: String,
-    /// para onde traduzir; também o idioma do modo `native`
+    /// language to translate into; also the language of `native` mode
     pub translate_to: String,
     pub reply_in: String,
     pub my_names: Vec<String>,
-    /// nomes, siglas e jargão que a transcrição deve acertar
+    /// names, acronyms and jargon the transcription must get right
     pub keywords: Vec<String>,
 }
 
@@ -128,16 +128,16 @@ impl Default for Languages {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Models {
-    /// os outros: o texto aparece enquanto falam
+    /// the others: the text shows up while they speak
     pub transcribe: String,
     /// gpt-live-transcribe: minimal | low | medium | high | xhigh
     pub transcribe_delay: String,
-    /// você: só dá contexto às sugestões, não precisa ser ao vivo
+    /// you: only gives context to the suggestions, does not need to be live
     pub mic: String,
-    /// gpt-realtime-translate traduz direto do áudio, ~2 s atrás da fala; um modelo de chat
-    /// (gpt-5.4-mini) traduz frase a frase, quando cada uma termina
+    /// gpt-realtime-translate translates straight from the audio, ~2 s behind the speech; a chat model
+    /// (gpt-5.4-mini) translates sentence by sentence, as each one ends
     pub translate: String,
-    /// notas de expressões quando a tradução é ao vivo
+    /// idiom notes when the translation is live
     pub notes: String,
     pub suggest: String,
 }
@@ -159,15 +159,15 @@ impl Default for Models {
 #[serde(default)]
 pub struct Audio {
     pub capture_mic: bool,
-    /// vazio = saída padrão do sistema (monitor)
+    /// empty = the system's default output (its monitor)
     pub they_target: String,
-    /// vazio = microfone padrão
+    /// empty = the default microphone
     pub mic_target: String,
-    /// volume (RMS 0..1) que conta como voz nos modelos ao vivo
+    /// volume (RMS 0..1) that counts as voice for the live models
     pub speech_level: f32,
-    /// silêncio que fecha a frase nos modelos ao vivo
+    /// silence that closes the sentence for the live models
     pub commit_ms: u32,
-    /// idem nos modelos com VAD no servidor
+    /// the same, for the models with server-side VAD
     pub vad_silence_ms: u32,
     pub vad_threshold: f32,
 }
@@ -200,13 +200,13 @@ impl Default for Suggestions {
     }
 }
 
-/// Perguntar ao Claude Code, que tem a memória dele e o código dos projetos.
+/// Asking Claude Code, which has its own memory and the projects' code.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Ask {
-    /// vazio = `claude` do PATH ou de ~/.local/bin
+    /// empty = `claude` from PATH or from ~/.local/bin
     pub command: String,
-    /// pasta de onde ele roda; a memória do Claude Code é por pasta
+    /// folder it runs from; Claude Code's memory is per folder
     pub cwd: String,
 }
 
@@ -244,7 +244,7 @@ pub fn language_name(code: &str) -> &str {
     }
 }
 
-/// US$ por minuto de áudio enviado.
+/// US$ per minute of audio sent.
 const PRICE_PER_MIN_USD: [(&str, f64); 6] = [
     ("gpt-live-transcribe", 0.017),
     ("gpt-realtime-whisper", 0.017),
@@ -275,10 +275,10 @@ impl Config {
         self.models.translate.starts_with("gpt-realtime-translate")
     }
 
-    /// Idiomas da transcrição de (eles, você) em cada modo, o principal primeiro.
+    /// Transcription languages for (them, you) in each mode, the main one first.
     ///
-    /// Na call no seu idioma o jargão vem em inglês ("o pod", "o deploy"); avisar o modelo
-    /// disso derruba os erros nesses termos.
+    /// In a call in your own language the jargon comes in English ("o pod", "o deploy"); telling the
+    /// model so cuts the errors on those terms.
     pub fn languages_for(&self, mode: Mode) -> (Vec<String>, Vec<String>) {
         let lang = &self.languages;
         match mode {

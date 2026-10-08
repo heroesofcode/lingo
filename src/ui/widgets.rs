@@ -1,4 +1,4 @@
-//! Peças da janela: medidor de volume, linha de fala e os painéis de sugestão e do Claude.
+//! Window parts: volume meter, utterance row, and the suggestion and Claude panels.
 
 use std::cell::Cell;
 use std::f64::consts::PI;
@@ -12,7 +12,7 @@ use regex::Regex;
 use crate::engine::{Speaker, SuggKind};
 use crate::text::ReplyOption;
 
-/// Negrito e `código` do markdown do Claude viram marcação do Pango; o resto vai escapado.
+/// Bold and `code` in Claude's markdown become Pango markup; everything else is escaped.
 pub fn md_to_pango(text: &str) -> String {
     static BOLD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\*\*(.+?)\*\*").unwrap());
     static CODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"`([^`]+)`").unwrap());
@@ -22,7 +22,7 @@ pub fn md_to_pango(text: &str) -> String {
     if pango::parse_markup(&markup, '\0').is_ok() {
         markup
     } else {
-        // marcações cruzadas: melhor texto puro do que nada
+        // crossed marks: plain text is better than nothing
         glib::markup_escape_text(&text.replace("**", "").replace('`', "")).to_string()
     }
 }
@@ -50,7 +50,7 @@ fn close_button(panel: &gtk::Box) -> gtk::Button {
     close
 }
 
-/// Barrinha de volume desenhada à mão (o GtkLevelBar varia demais com o tema).
+/// Small volume bar drawn by hand (GtkLevelBar varies too much between themes).
 pub struct Meter {
     pub area: gtk::DrawingArea,
     value: Rc<Cell<f64>>,
@@ -92,7 +92,7 @@ fn draw_pill(cr: &cairo::Context, width: f64, height: f64, value: f64, (r, g, b)
     }
 }
 
-/// Uma fala na lista. As de "eles" mostram também a tradução e as notas.
+/// One utterance in the list. Those from "them" also show the translation and the notes.
 #[derive(Clone)]
 pub struct Row {
     pub root: gtk::Box,
@@ -132,7 +132,7 @@ impl Row {
         self.cont.get()
     }
 
-    /// Continuação da fala anterior da mesma pessoa: sem cabeçalho, colada na de cima.
+    /// Continuation of the same person's previous utterance: no header, attached to the one above.
     pub fn set_cont(&self, cont: bool) {
         self.cont.set(cont);
         self.header.set_visible(!cont);
@@ -240,7 +240,7 @@ impl SuggestionPanel {
             (SuggKind::Phrase, _) => "COMO DIZER",
         });
         self.title.set_label(&format!("“{}”", if subtitle.is_empty() { title } else { subtitle }));
-        // Se o painel já está aberto, as opções anteriores ficam (esmaecidas) até chegar a primeira nova.
+        // If the panel is already open, the previous options stay (dimmed) until the first new one arrives.
         for option in &self.options {
             if self.root.is_visible() {
                 option.button.add_css_class("stale");
@@ -268,7 +268,7 @@ impl SuggestionPanel {
         }
         self.spinner.stop();
         for option in &self.options {
-            // a nova não chegou (erro): não deixar a antiga com título novo
+            // the new one did not arrive (error): do not leave the old one under a new title
             if option.button.has_css_class("stale") {
                 option.button.remove_css_class("stale");
                 option.set_option("", "");
@@ -284,7 +284,7 @@ impl SuggestionPanel {
     }
 }
 
-/// Resposta do Claude Code, com o que ele está consultando enquanto procura.
+/// Claude Code's answer, with what it is looking at while it searches.
 pub struct AskPanel {
     pub root: gtk::Box,
     spinner: gtk::Spinner,

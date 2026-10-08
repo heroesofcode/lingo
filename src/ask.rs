@@ -1,7 +1,7 @@
-//! Pergunta ao Claude Code (`claude -p`), que tem a memória do usuário e lê o código dos projetos.
+//! Asks Claude Code (`claude -p`), which has the user's memory and reads the projects' code.
 //!
-//! Roda só com ferramentas de leitura e sem salvar a sessão. A resposta chega em pedaços e,
-//! enquanto ele procura, cada ferramenta usada vira uma linha de progresso.
+//! It runs with read-only tools and without saving the session. The answer arrives in pieces and,
+//! while it searches, each tool it uses becomes a progress line.
 
 use std::path::{Component, Path, PathBuf};
 use std::process::Stdio;
@@ -22,9 +22,9 @@ nomes de serviços, versões e termos técnicos como estão.";
 
 #[derive(Debug, PartialEq)]
 pub enum AskEvent {
-    /// a resposta até agora (vazia quando o texto anterior era só um "vou procurar…")
+    /// the answer so far (empty when the previous text was only a "let me look…")
     Text(String),
-    /// o que ele está consultando
+    /// what it is looking at
     Progress(String),
 }
 
@@ -32,7 +32,7 @@ pub fn find_claude(configured: &str) -> Option<PathBuf> {
     if !configured.is_empty() {
         return Some(expand_home(configured));
     }
-    // A sessão do Hyprland pode não ter ~/.local/bin no PATH.
+    // The Hyprland session may not have ~/.local/bin in its PATH.
     let local = home().join(".local/bin/claude");
     find_in_path("claude").or_else(|| local.exists().then_some(local))
 }
@@ -71,7 +71,7 @@ pub fn describe(tool: &Value) -> String {
     }
 }
 
-/// Roda `command -p ...` com o prompt na entrada e repassa o texto e o progresso a `on_event`.
+/// Runs `command -p ...` with the prompt on stdin and passes the text and the progress to `on_event`.
 pub async fn ask_claude(
     command: &[String],
     cwd: &Path,
@@ -101,7 +101,7 @@ pub async fn ask_claude(
     stdin.write_all(prompt.as_bytes()).await.map_err(|e| e.to_string())?;
     drop(stdin);
     let mut stderr = child.stderr.take().expect("stderr com pipe");
-    // lido em paralelo para o pipe não encher e travar o processo
+    // read in parallel so the pipe does not fill up and stall the process
     let stderr_text = tokio::spawn(async move {
         let mut text = String::new();
         let _ = stderr.read_to_string(&mut text).await;

@@ -1,4 +1,4 @@
-//! Log em `~/.local/state/lingo/lingo.log` (e no terminal, se houver um).
+//! Log to `~/.local/state/lingo/lingo.log` (and to the terminal, if there is one).
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{IsTerminal, Write};
@@ -37,7 +37,7 @@ impl Log for Logger {
     fn flush(&self) {}
 }
 
-/// Abre o log, guardando as duas versões anteriores quando ele passa de 1 MB.
+/// Opens the log, keeping the two previous versions once it grows past 1 MB.
 pub fn init() {
     let dir = config::state_dir();
     let _ = fs::create_dir_all(&dir);

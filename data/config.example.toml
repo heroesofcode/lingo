@@ -1,39 +1,39 @@
-# Copie para ~/.config/lingo/config.toml e mude só o que precisar.
+# Copy to ~/.config/lingo/config.toml and change only what you need.
 
 [languages]
-mode = "translate"       # "translate": call em inglês, traduzida; "native": call em português (Ctrl+T troca)
-call = "en"              # idioma que os outros falam
-translate_to = "pt-BR"   # idioma da tradução e do modo "native"
-reply_in = "en"          # idioma das respostas sugeridas
-my_names = ["Pedro"]     # falar o seu nome também dispara sugestões
-# nomes, siglas e jargão que a transcrição deve acertar; acrescente o que ele errar
+mode = "translate"       # "translate": call in English, translated; "native": call in Portuguese (Ctrl+T switches)
+call = "en"              # language the others speak
+translate_to = "pt-BR"   # language of the translation and of "native" mode
+reply_in = "en"          # language of the suggested replies
+my_names = ["Pedro"]     # saying your name also triggers suggestions
+# names, acronyms and jargon the transcription must get right; add whatever it gets wrong
 keywords = ["UAT", "PRD", "pipeline", "merge", "PR", "Event Hub", "Kubernetes", "pod"]
 
 [models]
-transcribe = "gpt-live-transcribe"   # os outros, ao vivo; gpt-4o-mini-transcribe custa ~6x menos mas só mostra a frase quando a pessoa para
-transcribe_delay = "high"            # gpt-live-transcribe: minimal (mais rápido) … low, medium, high, xhigh (mais preciso)
-mic = "gpt-4o-transcribe"            # o seu microfone; gpt-4o-mini-transcribe custa metade e erra o dobro
-translate = "gpt-realtime-translate"  # português ~2 s atrás da fala; "gpt-5.4-mini" = frase a frase, metade do custo
-notes = "gpt-5.4-mini"                # notas de expressões quando a tradução é ao vivo
+transcribe = "gpt-live-transcribe"   # the others, live; gpt-4o-mini-transcribe costs ~6x less but only shows a sentence once the person stops
+transcribe_delay = "high"            # gpt-live-transcribe: minimal (fastest) … low, medium, high, xhigh (most accurate)
+mic = "gpt-4o-transcribe"            # your microphone; gpt-4o-mini-transcribe costs half and makes twice the errors
+translate = "gpt-realtime-translate"  # Portuguese ~2 s behind the speech; "gpt-5.4-mini" = sentence by sentence, half the cost
+notes = "gpt-5.4-mini"                # idiom notes when the translation is live
 suggest = "gpt-5.4-mini"
 
 [audio]
-capture_mic = true       # transcrever o seu microfone (dá contexto às sugestões)
-they_target = ""         # vazio = saída padrão do sistema; ou o nome de um sink do PipeWire
-mic_target = ""          # vazio = microfone padrão
-speech_level = 0.003     # volume (RMS 0..1) que conta como voz; baixe se a call estiver baixa
-commit_ms = 700          # silêncio que fecha uma fala dos outros
-vad_silence_ms = 500     # silêncio que fecha uma fala sua (VAD do servidor)
+capture_mic = true       # transcribe your microphone (gives context to the suggestions)
+they_target = ""         # empty = the system's default output; or the name of a PipeWire sink
+mic_target = ""          # empty = the default microphone
+speech_level = 0.003     # volume (RMS 0..1) that counts as voice; lower it if the call is quiet
+commit_ms = 700          # silence that closes an utterance from the others
+vad_silence_ms = 500     # silence that closes your utterance (server VAD)
 vad_threshold = 0.5
 
 [suggestions]
-auto = true              # sugerir sozinho quando fizerem uma pergunta
-delay_s = 0.5            # espera depois da última frase antes de sugerir (com "?" sugere na hora)
-context_lines = 14       # quantas falas recentes vão como contexto
+auto = true              # suggest on its own when someone asks a question
+delay_s = 0.5            # wait after the last sentence before suggesting (with "?" it suggests right away)
+context_lines = 14       # how many recent utterances go as context
 
 [ask]
-command = ""             # vazio = `claude` do PATH ou de ~/.local/bin
-cwd = "~"                # de onde o Claude Code roda; a memória dele é por pasta
+command = ""             # empty = `claude` from PATH or from ~/.local/bin
+cwd = "~"                # where Claude Code runs from; its memory is per folder
 
 [misc]
-save_transcripts = false # true grava cada call em ~/.local/share/lingo/sessions/
+save_transcripts = false # true saves each call to ~/.local/share/lingo/sessions/

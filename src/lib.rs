@@ -1,4 +1,4 @@
-//! Lingo: tradução ao vivo e sugestões de resposta em calls, para Linux.
+//! Lingo: live translation and reply suggestions for calls, on Linux.
 
 pub mod ask;
 pub mod audio;

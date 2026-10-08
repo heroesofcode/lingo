@@ -1,6 +1,6 @@
 /target
 *.wav
 *.pcm
-# Nunca versionar a chave
+# Never commit the key
 openai_key
 *.key

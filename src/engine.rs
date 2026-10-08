@@ -1,8 +1,8 @@
-//! Orquestra captura, transcrição, tradução e sugestões.
+//! Orchestrates capture, transcription, translation and suggestions.
 //!
-//! O motor é uma tarefa só: comandos da janela, eventos dos WebSockets e respostas dos modelos
-//! chegam como mensagens na mesma fila e são tratados um de cada vez, então o estado não precisa
-//! de locks. Tudo o que a janela precisa saber sai como `Event`.
+//! The engine is a single task: window commands, WebSocket events and model answers arrive as
+//! messages on the same queue and are handled one at a time, so the state needs no locks.
+//! Everything the window needs to know goes out as an `Event`.
 
 use std::collections::HashMap;
 use std::fs::OpenOptions;
@@ -30,11 +30,11 @@ use crate::text::{self, ReplyOption};
 const MAX_UTTERANCES: usize = 400;
 const ECHO_WINDOW: Duration = Duration::from_secs(20);
 const AUTO_MIN_INTERVAL: Duration = Duration::from_secs(3);
-/// falas seguidas da mesma pessoa com menos que isso entre elas formam um bloco
+/// consecutive utterances from the same person with less than this between them form a block
 const BLOCK_GAP: Duration = Duration::from_secs(20);
-/// a tradução ao vivo só passa para a fala seguinte depois de uma pausa dela
+/// the live translation only moves on to the next utterance after a pause in it
 const TR_SETTLE: Duration = Duration::from_millis(800);
-/// 3 s de silêncio depois da fala; com menos, o tradutor engole as últimas palavras
+/// 3 s of silence after the speech; with less, the translator swallows the last words
 const TRANSLATOR_HOLD_CHUNKS: usize = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -52,7 +52,7 @@ impl Speaker {
     }
 }
 
-/// De onde vem um aviso de conexão: a transcrição de cada lado ou o tradutor ao vivo.
+/// Where a connection notice comes from: each side's transcription or the live translator.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Origin {
     They,
@@ -75,17 +75,17 @@ pub enum SuggKind {
     Phrase,
 }
 
-/// O que a janela pede ao motor.
+/// What the window asks of the engine.
 #[derive(Debug)]
 pub enum Command {
-    /// sugere respostas para a fala `uid` (ou a última dos outros)
+    /// suggests replies to utterance `uid` (or the latest one from the others)
     Suggest(Option<String>),
-    /// pergunta ao Claude o texto digitado ou, sem ele, a fala `uid` (ou a última dos outros)
+    /// asks Claude the typed text or, without it, utterance `uid` (or the latest one from the others)
     Ask {
         question: String,
         uid: Option<String>,
     },
-    /// "como digo isso?"
+    /// "how do I say this?"
     Phrase(String),
     SetPaused(bool),
     SetMic(bool),
@@ -93,7 +93,7 @@ pub enum Command {
     Clear,
 }
 
-/// O que o motor conta para a janela.
+/// What the engine tells the window.
 #[derive(Debug, Clone)]
 pub enum Event {
     Levels { they: f32, me: f32 },
@@ -129,7 +129,7 @@ enum Msg {
     Shutdown(oneshot::Sender<()>),
 }
 
-/// Fila de entrada do motor, entregue a `Engine::run`.
+/// The engine's input queue, handed to `Engine::run`.
 pub struct Inbox(mpsc::UnboundedReceiver<Msg>);
 
 #[derive(Clone)]
@@ -138,7 +138,7 @@ pub struct EngineHandle {
 }
 
 impl EngineHandle {
-    /// Um motor que não existe (sem chave da OpenAI): os comandos são ignorados.
+    /// An engine that does not exist (no OpenAI key): commands are ignored.
     pub fn detached() -> EngineHandle {
         EngineHandle { tx: mpsc::unbounded_channel().0 }
     }
@@ -164,7 +164,7 @@ impl Ui {
     }
 }
 
-/// Pedaço de uma fala (uma frase, em geral) traduzido sozinho, assim que termina.
+/// Piece of an utterance (usually a sentence), translated on its own as soon as it ends.
 #[derive(Debug, Default)]
 struct Segment {
     source: String,
@@ -181,17 +181,17 @@ struct Utterance {
     started_wall: DateTime<Local>,
     text: String,
     is_final: bool,
-    /// deltas como chegaram; os cortes para tradução são feitos sobre ele
+    /// deltas as they arrived; the cuts for translation are made on it
     live: String,
-    /// quanto de `live` já foi mandado traduzir
+    /// how much of `live` has already been sent for translation
     cut: usize,
     segments: Vec<Segment>,
     translation: String,
     note: String,
     saved_translation: bool,
-    /// palavras que a fala tinha quando a sugestão saiu no "?"
+    /// words the utterance had when the suggestion went out on the "?"
     asked_words: usize,
-    /// quando chegou o último texto
+    /// when the latest text arrived
     updated: Instant,
 }
 
@@ -228,16 +228,16 @@ impl Drop for AbortOnDrop {
     }
 }
 
-/// Um lado da conversa: a captura, a transcrição e (para os outros) o tradutor ao vivo.
+/// One side of the conversation: capture, transcription and (for the others) the live translator.
 struct Side {
     args: SessionArgs,
     transcriber: Socket,
     translator: Option<Socket>,
-    /// compartilhado com a tarefa de captura, que manda o áudio também para o tradutor
+    /// shared with the capture task, which also sends the audio to the translator
     translator_feed: Arc<Mutex<Option<TranslatorFeed>>>,
-    /// maior volume desde a última leitura, em bits de f32 (para f32 ≥ 0 a ordem dos bits é a dos números)
+    /// highest volume since the last read, as f32 bits (for f32 ≥ 0 the bit order matches the numbers)
     level: Arc<AtomicU32>,
-    /// há uma frase em andamento (TurnGate aberto)
+    /// a sentence is in progress (TurnGate open)
     speaking: Arc<AtomicBool>,
     _capture: AbortOnDrop,
 }
@@ -262,12 +262,12 @@ pub struct Engine {
     auto_target: Option<String>,
     auto_deadline: Option<Instant>,
     last_auto: Option<Instant>,
-    // tradução ao vivo: o texto corrido é repartido entre as falas dos outros
+    // live translation: the running text is split among the others' utterances
     tr_uid: Option<String>,
     tr_pending: String,
     tr_last: Option<Instant>,
     transcript: Option<PathBuf>,
-    /// nos testes: guarda o texto das falas que receberiam sugestão em vez de chamar o modelo
+    /// in tests: records the text of the utterances that would get suggestions, instead of calling the model
     record: Option<Vec<String>>,
 }
 
@@ -387,12 +387,12 @@ impl Engine {
         }
     }
 
-    // ---- ciclo de vida ------------------------------------------------
+    // ---- lifecycle ---------------------------------------------------
 
     fn shutdown(&mut self) {
         self.stop_listening();
         for task in [self.ask_task.take(), self.suggest_task.take()].into_iter().flatten() {
-            task.abort(); // mata o `claude` que estiver rodando
+            task.abort(); // kills the `claude` that may be running
         }
     }
 
@@ -607,7 +607,7 @@ impl Engine {
             self.ui.send(Event::Status { origin: Origin::Translator, status: Status::Stopped, detail: String::new() });
         }
         self.usage.add(&side.transcriber);
-        drop(side); // aborta a captura (mata o pw-record) e fecha o WebSocket
+        drop(side); // aborts the capture (kills pw-record) and closes the WebSocket
         self.ui.send(Event::Status { origin: speaker.into(), status: Status::Stopped, detail: String::new() });
     }
 
@@ -630,7 +630,7 @@ impl Engine {
         }
     }
 
-    // ---- eventos da transcrição ---------------------------------------
+    // ---- transcription events ----------------------------------------
 
     fn utterance(&mut self, speaker: Speaker, item: &str, now: Instant) -> String {
         let uid = format!("{}:{item}", speaker.label());
@@ -665,11 +665,11 @@ impl Engine {
     }
 
     fn on_speech_started(&mut self, speaker: Speaker) {
-        // A linha só aparece com o primeiro texto, para não piscar com ruído.
+        // The row only shows up with the first text, so it does not flicker with noise.
         if speaker == Speaker::Me {
             self.cancel_auto();
         } else {
-            // Ainda estão falando: espera terminarem antes de sugerir.
+            // They are still talking: wait for them to finish before suggesting.
             self.auto_deadline = None;
         }
     }
@@ -693,7 +693,7 @@ impl Engine {
         }
         let words = line.split_whitespace().count();
         if self.cfg.suggestions.auto && line.ends_with('?') && words > asked {
-            // Sugere já no "?", sem esperar o silêncio que fecha a fala (~1,2 s a menos).
+            // Suggest right at the "?", without waiting for the silence that closes the utterance (~1.2 s sooner).
             if let Some(utt) = self.utts.get_mut(&uid) {
                 utt.asked_words = words;
             }
@@ -745,7 +745,7 @@ impl Engine {
             self.save_translation(&uid);
         }
         if asked > 0 && line.split_whitespace().count() <= asked {
-            return; // já sugerido no "?" e nada foi dito depois
+            return; // already suggested at the "?" and nothing was said after it
         }
         let auto = self.cfg.suggestions.auto;
         if auto && (text::is_question(&line) || text::mentions(&line, &self.cfg.languages.my_names)) {
@@ -764,7 +764,7 @@ impl Engine {
         })
     }
 
-    // ---- gatilho automático -------------------------------------------
+    // ---- automatic trigger -------------------------------------------
 
     fn arm_auto(&mut self, uid: String, now: Instant) {
         self.auto_target = Some(uid);
@@ -777,7 +777,7 @@ impl Engine {
     fn fire_auto(&mut self, now: Instant) {
         self.auto_deadline = None;
         if self.sides.get(&Speaker::They).is_some_and(|side| side.speaking.load(Ordering::Relaxed)) {
-            return; // emendaram outra frase; quando ela terminar o gatilho é armado de novo
+            return; // they went on with another sentence; when it ends the trigger is armed again
         }
         let Some(target) = self.auto_target.take() else { return };
         if self.utts.contains_key(&target) && !self.paused {
@@ -791,7 +791,7 @@ impl Engine {
         self.auto_target = None;
     }
 
-    // ---- tradução -----------------------------------------------------
+    // ---- translation -------------------------------------------------
 
     fn context(&self, upto: Option<&str>, n: usize) -> (Vec<(Speaker, String)>, Option<usize>) {
         let n = n.max(1);
@@ -807,7 +807,7 @@ impl Engine {
         (lines(&items[items.len().saturating_sub(n)..]), None)
     }
 
-    /// Manda traduzir cada frase que terminou, sem esperar a pessoa parar de falar.
+    /// Sends each finished sentence for translation, without waiting for the person to stop talking.
     fn cut(&mut self, uid: &str, is_final: bool) {
         let Some(utt) = self.utts.get_mut(uid) else { return };
         let (pieces, used) = text::take_sentences(&utt.live[utt.cut..], is_final);
@@ -838,7 +838,7 @@ impl Engine {
         (lines, idx)
     }
 
-    /// Traduz o pedaço; com a tradução ao vivo ligada, só explica as expressões dele.
+    /// Translates the piece; with live translation on, it only explains the piece's expressions.
     fn start_segment(&mut self, uid: &str, seg: usize) {
         if self.record.is_some() {
             return;
@@ -880,7 +880,7 @@ impl Engine {
         if let Some(e) = error {
             warn!("tradução/notas falhou: {e}");
             if !live {
-                // sem as notas dá para seguir; sem a tradução, não
+                // we can do without the notes, but not without the translation
                 self.ui.send(Event::Error(format!("Tradução falhou: {e}")));
             }
         }
@@ -914,13 +914,13 @@ impl Engine {
         self.ui.send(Event::Note { uid: uid.to_string(), note: utt.note.clone() });
     }
 
-    // ---- tradução ao vivo (gpt-realtime-translate) ---------------------
+    // ---- live translation (gpt-realtime-translate) --------------------
 
-    /// Texto corrido da tradução; vai para a fala dos outros que está sendo traduzida.
+    /// Running text of the translation; it goes to the others' utterance being translated.
     ///
-    /// A API não marca fim de frase nem de fala, e o texto vem ~2 s atrás do original. A tradução
-    /// só passa para a fala seguinte depois de uma pausa dela, então nunca adianta: no pior caso,
-    /// o fim de uma frase aparece embaixo da fala seguinte.
+    /// The API marks neither sentence nor utterance ends, and the text comes ~2 s behind the original.
+    /// The translation only moves on to the next utterance after a pause in it, so it never runs ahead:
+    /// at worst, the end of a sentence shows up under the next utterance.
     fn on_live_translation(&mut self, delta: &str, now: Instant) {
         let newest = self.utts.values().rev().find(|u| u.speaker == Speaker::They).map(|u| u.uid.clone());
         let mut current = self.tr_uid.clone().filter(|uid| self.utts.contains_key(uid));
@@ -941,7 +941,7 @@ impl Engine {
         }
         self.tr_last = Some(now);
         let Some(uid) = current else {
-            self.tr_pending.push_str(delta); // traduzido antes de a fala aparecer na tela
+            self.tr_pending.push_str(delta); // translated before the utterance showed up on screen
             return;
         };
         if let Some(utt) = self.utts.get_mut(&uid) {
@@ -950,7 +950,7 @@ impl Engine {
         }
     }
 
-    // ---- sugestões e perguntas ----------------------------------------
+    // ---- suggestions and questions -----------------------------------
 
     fn last_they_line(&self) -> Option<String> {
         self.utts.values().rev().find(|u| u.speaker == Speaker::They && !u.text.is_empty()).map(|u| u.uid.clone())
@@ -984,7 +984,7 @@ impl Engine {
             prompts::suggest_system(native, None)
         };
         let user = format!("Call transcript:\n{}", prompts::transcript_block(&lines, idx));
-        // Com a tradução ao vivo, no "?" o português da pergunta ainda está chegando: título em inglês.
+        // With live translation the Portuguese is still arriving at the "?", so the title stays in English.
         let subtitle = if self.translating() && !self.live_translation() { translation } else { String::new() };
         self.stream_options(SuggKind::Reply, title, subtitle, auto, system, user, 0.7);
     }
@@ -1037,7 +1037,7 @@ impl Engine {
         }));
     }
 
-    /// Pergunta ao Claude Code: o texto digitado ou, sem ele, a fala dos outros (a última ou `uid`).
+    /// Asks Claude Code: the typed text or, without it, the others' utterance (the latest one or `uid`).
     fn ask(&mut self, question: &str, uid: Option<&str>) {
         let question = question.trim().to_string();
         let target = if question.is_empty() {
@@ -1080,7 +1080,7 @@ impl Engine {
         }));
     }
 
-    // ---- histórico opcional -------------------------------------------
+    // ---- optional history --------------------------------------------
 
     fn append_transcript(&self, text: &str) {
         let Some(path) = &self.transcript else { return };
@@ -1109,7 +1109,7 @@ impl Engine {
         utt.saved_translation = true;
         let mut out = String::new();
         if !utt.translation.is_empty() && !live {
-            out.push_str(&format!("  - _{}_\n", utt.translation)); // a ao vivo vai por save_live_translation
+            out.push_str(&format!("  - _{}_\n", utt.translation)); // the live one is saved by save_live_translation
         }
         if !utt.note.is_empty() {
             out.push_str(&format!("  - 💡 {}\n", utt.note));
@@ -1163,7 +1163,7 @@ mod tests {
         deltas(&mut engine, "i1", &["?"], now);
         assert_eq!(asked(&engine), ["Do you agree?"]);
         engine.on_completed(Speaker::They, "i1", "Do you agree?", now);
-        assert!(engine.auto_deadline.is_none()); // nada novo depois do "?": não sugere de novo
+        assert!(engine.auto_deadline.is_none()); // nothing new after the "?": no second suggestion
     }
 
     #[test]
@@ -1183,7 +1183,7 @@ mod tests {
         assert_eq!(asked(&engine), ["Right?", "Right? Any ideas?"]);
     }
 
-    /// A tradução ao vivo é um texto corrido; o motor decide embaixo de qual fala ela aparece.
+    /// Live translation is a running text; the engine decides under which utterance it appears.
     struct Live {
         engine: Engine,
         rx: async_channel::Receiver<Event>,
@@ -1255,8 +1255,8 @@ mod tests {
         t.translate("Alguns timeouts vêm", 0.3);
         t.say(Speaker::Me, "m", "Okay.");
         t.say(Speaker::They, "c", "Pedro, any idea?");
-        t.translate("do fornecedor.", 0.2); // ainda é o fim do bloco anterior
-        t.translate("Pedro, alguma ideia?", 1.5); // depois de uma pausa: bloco novo
+        t.translate("do fornecedor.", 0.2); // still the end of the previous block
+        t.translate("Pedro, alguma ideia?", 1.5); // after a pause: new block
         assert_eq!(
             t.shown(),
             map(&[("THEY:a", "Alguns timeouts vêm do fornecedor."), ("THEY:c", "Pedro, alguma ideia?")])

@@ -1,182 +1,186 @@
 # Lingo
 
-Janela pequena que fica por cima durante calls em inglês:
+A small always-on-top window for calls in English, made for Portuguese speakers:
 
-- mostra o que os outros falam enquanto falam (cada palavra aparece ~1 s depois de dita), com o
-  português saindo ~2 s atrás da fala, e explica expressões como *circle back* ou *touch base*;
-- quando fazem uma pergunta (ou falam o seu nome), sugere 3 respostas em inglês: direta, completa
-  e diplomática, cada uma com o sentido em português;
-- no campo "Como digo…?" você escreve em português e recebe 3 jeitos de dizer em inglês.
+- shows what the others say while they speak (each word appears ~1 s after it is said), with the
+  Portuguese translation ~2 s behind the speech, and explains expressions such as *circle back* or
+  *touch base*;
+- when someone asks a question (or says your name), suggests 3 replies in English: direct, complete
+  and diplomatic, each with its meaning in Portuguese;
+- in the "Como digo…?" ("how do I say…?") field you write in Portuguese and get 3 ways to say it in
+  English.
 
-Em call em português, o botão `EN→PT` da barra (ou `Ctrl+T`) troca para o modo `PT`: só transcreve,
-sem tradução, e as respostas sugeridas vêm em português.
+For a call in Portuguese, the `EN→PT` button in the top bar (or `Ctrl+T`) switches to `PT` mode: it
+only transcribes, without translation, and the suggested replies come in Portuguese.
 
-Feito para Linux com PipeWire. A janela é GTK4 nativa em Wayland; no Hyprland ela flutua, fica fixa
-em todas as workspaces e tem atalhos globais.
+The interface is in Brazilian Portuguese for now.
 
-## Como funciona
+Made for Linux with PipeWire. The window is native GTK4 on Wayland; on Hyprland it floats, stays
+pinned on every workspace and has global shortcuts.
+
+## How it works
 
 ```
-saída do sistema ─┬─pw-record──▶ gpt-live-transcribe (inglês, ao vivo) ──▶ janela, sugestões
-                  └────────────▶ gpt-realtime-translate (português)  ──▶ janela
-microfone        ──pw-record──▶ gpt-4o-transcribe                   ──▶ contexto das sugestões
+system output ─┬─pw-record──▶ gpt-live-transcribe (English, live) ──▶ window, suggestions
+               └────────────▶ gpt-realtime-translate (Portuguese)  ──▶ window
+microphone    ──pw-record──▶ gpt-4o-transcribe                    ──▶ context for the suggestions
 ```
 
-Cada lado da conversa é um fluxo separado, então não precisa adivinhar quem falou. O inglês dos
-outros chega palavra a palavra, e o português sai de um tradutor ao vivo que ouve o mesmo áudio,
-~2 s atrás da fala, sem esperar a frase acabar. Cada fala ganha o seu pedaço da tradução embaixo:
-a tradução só passa para a fala seguinte quando ela mesma faz uma pausa. As notas 💡 de expressões
-vêm por frase, de uma chamada à parte ao `gpt-5.4-mini`.
+Each side of the conversation is a separate stream, so there is no need to guess who spoke. The
+others' English arrives word by word, and the Portuguese comes from a live translator that listens
+to the same audio, ~2 s behind the speech, without waiting for the sentence to end. Each utterance
+gets its own piece of the translation below it: the translation only moves on to the next utterance
+when it pauses itself. The 💡 idiom notes come per sentence, from a separate call to `gpt-5.4-mini`.
 
-Quem fecha a fala é o Lingo, depois de 700 ms sem voz. Falas seguidas da mesma pessoa ficam num
-bloco só, e a fala em andamento tem uma barra azul à esquerda. Só os trechos com voz são enviados
-(ao tradutor vão também 3 s de silêncio depois de cada fala: com menos, ele engole o final).
+Lingo itself closes each utterance after 700 ms without voice. Consecutive utterances from the same
+person are grouped in one block, and the utterance in progress has a blue bar on its left. Only the
+stretches with voice are sent (the translator also gets 3 s of silence after each utterance: with
+less, it swallows the ending).
 
-Com `translate = "gpt-5.4-mini"` em `[models]`, a tradução volta a ser frase a frase: o português
-de cada frase só aparece ~2 s depois que ela termina. Custa metade, mas em frase longa a espera
-chega a 8–10 s. A tradução ao vivo não aceita a lista de termos, então às vezes o jargão sai
-traduzido.
+With `translate = "gpt-5.4-mini"` in `[models]`, translation goes back to sentence by sentence: the
+Portuguese of each sentence only appears ~2 s after it ends. It costs half, but on a long sentence
+the wait reaches 8–10 s. The live translator does not accept the keyword list, so jargon is
+sometimes translated.
 
-Medido com fala gerada por TTS, do fim de cada palavra até ela aparecer na janela:
+Measured with TTS-generated speech, from the end of each word until it appears in the window:
 
-| | mediana | frase longa (p90) | pior |
+| | median | long sentence (p90) | worst |
 |---|---|---|---|
-| inglês | 1,15 s | 1,45 s | — |
-| português, ao vivo | 2,2 s | 3,8 s | 4,3 s |
-| português, frase a frase (`gpt-5.4-mini`) | 4,4 s | 8,6 s | 10,2 s |
+| English | 1.15 s | 1.45 s | — |
+| Portuguese, live | 2.2 s | 3.8 s | 4.3 s |
+| Portuguese, sentence by sentence (`gpt-5.4-mini`) | 4.4 s | 8.6 s | 10.2 s |
 
-No fim de uma pergunta, os dois jeitos de traduzir terminam ~2 s depois da última palavra.
+At the end of a question, both ways of translating finish ~2 s after the last word.
 
-A sugestão automática começa assim que o "?" aparece, sem esperar o silêncio: a primeira opção
-fica completa ~2,3 s depois do fim da pergunta, e as três em ~3 s. Se a pessoa continua falando
-depois da pergunta, ela é refeita quando a pessoa para; enquanto isso, as opções anteriores ficam
-esmaecidas no painel.
+The automatic suggestion starts as soon as the "?" shows up, without waiting for the silence: the
+first option is complete ~2.3 s after the end of the question, and all three in ~3 s. If the person
+keeps talking after the question, it is redone when they stop; meanwhile, the previous options stay
+dimmed in the panel.
 
-### Precisão
+### Accuracy
 
-O que mais dá errado em call de dev é o jargão em inglês no meio do português ("o pod" vira
-"pode"). Três coisas resolvem:
+What goes wrong most in a developers' call is English jargon in the middle of Portuguese ("o pod"
+becomes "pode"). Three things fix it:
 
-- `keywords` em `[languages]`: nomes, siglas e termos do projeto, passados aos dois modelos;
-- no modo `PT`, a fala dos outros é marcada como português **e** inglês;
-- `transcribe_delay = "high"`: o modelo espera um pouco mais de contexto antes de escrever.
+- `keywords` in `[languages]`: names, acronyms and project terms, passed to both models;
+- in `PT` mode, the others' speech is tagged as Portuguese **and** English;
+- `transcribe_delay = "high"`: the model waits for a bit more context before writing.
 
-Em 8 falas de dev a ~230 palavras/min, com ruído e Opus a 16 kbps, o erro de palavras na fala dos
-outros caiu de 3,5% para 1,1%, e o do microfone de 4,4% para 0,9%. Todos os termos técnicos
-saíram certos, inclusive os que não estavam na lista. O custo é ~0,3 s a mais por palavra
-(`low` deixa mais rápido, com o triplo de erros).
+On 8 developer utterances at ~230 words/min, with noise and Opus at 16 kbps, the word error rate
+dropped from 3.5% to 1.1% for the others and from 4.4% to 0.9% for the microphone. Every technical
+term came out right, including the ones that were not on the list. The cost is ~0.3 s more per word
+(`low` is faster, with three times the errors).
 
-### Perguntar ao Claude
+### Asking Claude
 
-Para perguntas de fato sobre os projetos ("que versão da lib de pagamentos o checkout usa?"), o Lingo chama o
-Claude Code (`claude -p`), que tem a memória dele e lê o código. A resposta aparece no painel
-CLAUDE, que mostra o que ele está consultando enquanto procura:
+For factual questions about your projects ("which version of the payments lib does checkout
+use?"), Lingo calls Claude Code (`claude -p`), which has its own memory and reads the code. The
+answer appears in the CLAUDE panel, which shows what it is looking at while it searches:
 
-- `SUPER+ALT+A`, `Ctrl+K` ou botão direito numa fala: pergunta sobre a última fala dos outros
-  (ou sobre aquela fala);
-- no campo de baixo, `?pergunta` + Enter pergunta o que você digitar (no modo `PT`, qualquer texto).
+- `SUPER+ALT+A`, `Ctrl+K` or right-clicking an utterance: asks about the others' latest utterance
+  (or about that one);
+- in the bottom field, `?question` + Enter asks what you typed (in `PT` mode, any text).
 
-Se a resposta está na memória, chega em ~3–4 s. Com uma busca no código, em ~6–12 s, e quando ele
-precisa investigar vários arquivos, em ~30 s. Ele roda a partir de `~` (a memória do Claude Code é
-por pasta; mude em `[ask] cwd`), só com ferramentas de leitura (Read, Grep, Glob) e sem salvar a
-sessão no histórico. O conteúdo da call vai para o Claude Code, não para a OpenAI.
+If the answer is in its memory, it arrives in ~3–4 s; with one code search, in ~6–12 s; and when it
+needs to look through several files, in ~30 s. It runs from `~` (Claude Code's memory is per folder;
+change it in `[ask] cwd`), only with read-only tools (Read, Grep, Glob) and without saving the
+session to its history. The call content goes to Claude Code, not to OpenAI.
 
-## Instalar
+## Install
 
-Precisa de PipeWire (`pw-record`), GTK 4.14 ou mais novo, GLib 2.80 ou mais nova, Rust 1.92 ou
-mais novo ([rustup](https://rustup.rs)) e uma chave da OpenAI. Para compilar:
+You need PipeWire (`pw-record`), GTK 4.14 or newer, GLib 2.80 or newer, Rust 1.92 or newer
+([rustup](https://rustup.rs)) and an OpenAI API key. To build:
 
 ```bash
 sudo apt install build-essential pkg-config libgtk-4-dev libssl-dev   # Ubuntu 24.04 / Debian
 sudo pacman -S --needed base-devel gtk4 openssl                        # Arch / Omarchy
 ```
 
-Depois:
+Then:
 
 ```bash
-tools/install.sh   # compila, instala em ~/.local/bin/lingo, cria o .desktop e as regras do Hyprland
+tools/install.sh   # builds, installs to ~/.local/bin/lingo, creates the .desktop entry and the Hyprland rules
 mkdir -p ~/.config/lingo
-(umask 077; read -rsp "chave da OpenAI: " k && echo "$k" > ~/.config/lingo/openai_key)
+(umask 077; read -rsp "OpenAI key: " k && echo "$k" > ~/.config/lingo/openai_key)
 ```
 
-A chave também pode vir da variável `OPENAI_API_KEY`. Se algum atalho `SUPER+ALT` já fizer outra
-coisa no seu Hyprland (no Omarchy, por exemplo), o `install.sh` o deixa comentado em
-`~/.config/hypr/lingo.conf` e avisa.
+The key can also come from the `OPENAI_API_KEY` variable. If a `SUPER+ALT` shortcut already does
+something else in your Hyprland (on Omarchy, for example), `install.sh` comments it out in
+`~/.config/hypr/lingo.conf` and tells you.
 
-## Usar
-
-| | |
-|---|---|
-| `SUPER+ALT+L` | abre / mostra / esconde |
-| `SUPER+ALT+R` | sugere respostas para a última fala |
-| `SUPER+ALT+P` | pausa / retoma (pausar libera o microfone) |
-| `SUPER+ALT+A` ou `Ctrl+K` | pergunta ao Claude sobre a última fala |
-| clique numa fala | sugere respostas para aquela fala |
-| botão direito numa fala | pergunta ao Claude sobre aquela fala |
-| `?pergunta` + Enter no campo | pergunta ao Claude o que você digitou |
-| clique numa opção ou `Ctrl+1..3` | copia a resposta |
-| `Ctrl+T` ou o botão `EN→PT` / `PT` | troca entre traduzir e call em português |
-| `Ctrl+R` `Ctrl+P` `Ctrl+M` `Ctrl+L` `Esc` | sugerir, pausar, microfone, limpar, fechar painel |
-
-Pela linha de comando: `lingo --help`.
-
-Configuração em `~/.config/lingo/config.toml` (modelo em `data/config.example.toml`). Log em
-`~/.local/state/lingo/lingo.log`.
-
-## Custos
-
-A fala dos outros usa `gpt-live-transcribe` (US$ 0,017 por minuto de voz enviada; o silêncio não
-vai) e `gpt-realtime-translate` (US$ 0,034 por minuto). O seu microfone usa `gpt-4o-transcribe`,
-US$ 0,006 por minuto (`mic = "gpt-4o-mini-transcribe"` custa metade e erra o dobro). Numa call de
-1 hora em que os outros falam metade do tempo, dá uns US$ 1,90; no máximo US$ 3,40 se falarem sem
-parar. Com a tradução frase a frase (`translate = "gpt-5.4-mini"`), uns US$ 0,90.
-Tradução e sugestões com `gpt-5.4-mini` são poucas centenas de tokens cada. O contador da barra
-de cima mostra o custo estimado da transcrição e da tradução; com o mouse em cima, os minutos
-enviados.
-
-Para gastar ~6x menos na fala dos outros, ponha `transcribe = "gpt-4o-mini-transcribe"` em
-`[models]`. O texto volta a aparecer só quando a pessoa para de falar.
-
-## Bom saber
-
-- **Bluetooth:** enquanto o microfone está aberto, o headset fica no perfil de chamada (som pior).
-  Pausar ou fechar o Lingo libera o microfone.
-- **Volume da call:** só conta como voz o que passa de `speech_level` (0,003). Se o medidor
-  "eles" mexe mas nenhum texto aparece, baixe esse valor em `[audio]`; se ruído vira texto, suba.
-- **Compartilhar tela:** a janela aparece se você compartilhar a tela inteira. Compartilhe só a
-  janela da call.
-- **Privacidade:** o áudio da call vai para a OpenAI. Veja se isso é permitido na empresa e no
-  cliente antes de usar em reuniões com outras pessoas.
-- **Fontes:** o Lingo usa um cache de fontconfig só seu (`~/.cache/lingo`), porque o Edge grava
-  um cache em formato novo em `~/.cache/fontconfig` que bagunça apps com fontconfig mais antigo.
-- **Tradução em português de Portugal:** o tradutor ao vivo só aceita `pt`, sem variante, e às
-  vezes responde "Implementámos" em vez de "Implementamos". Não há como pedir pt-BR para ele.
-
-## Código
-
-Rust, com GTK4 ([gtk4-rs](https://gtk-rs.org)) na thread principal e o motor no
-[tokio](https://tokio.rs), em threads próprias:
+## Use
 
 | | |
 |---|---|
-| `src/engine.rs` | o motor: recebe tudo numa fila só (comandos da janela, eventos da OpenAI) e manda eventos para a janela |
-| `src/realtime.rs` | WebSockets da Realtime API (transcrição e tradução ao vivo), com reconexão |
-| `src/audio.rs` | captura com `pw-record` e os portões de voz/silêncio |
-| `src/llm.rs`, `src/prompts.rs`, `src/text.rs` | chamadas de chat em streaming, prompts e leitura das respostas |
-| `src/ask.rs` | perguntas ao Claude Code |
-| `src/ui/` | a janela e a linha de comando |
+| `SUPER+ALT+L` | open / show / hide |
+| `SUPER+ALT+R` | suggest replies to the latest utterance |
+| `SUPER+ALT+P` | pause / resume (pausing releases the microphone) |
+| `SUPER+ALT+A` or `Ctrl+K` | ask Claude about the latest utterance |
+| click an utterance | suggest replies to that utterance |
+| right-click an utterance | ask Claude about that utterance |
+| `?question` + Enter in the field | ask Claude what you typed |
+| click an option or `Ctrl+1..3` | copy the reply |
+| `Ctrl+T` or the `EN→PT` / `PT` button | switch between translating and a call in Portuguese |
+| `Ctrl+R` `Ctrl+P` `Ctrl+M` `Ctrl+L` `Esc` | suggest, pause, microphone, clear, close panel |
 
-A primeira versão, em Python, está no branch `python`.
+From the command line: `lingo --help`.
 
-## Testes
+Configuration lives in `~/.config/lingo/config.toml` (template in `data/config.example.toml`). The
+log is in `~/.local/state/lingo/lingo.log`.
+
+## Costs
+
+The others' speech uses `gpt-live-transcribe` ($0.017 per minute of voice sent; silence is not sent)
+and `gpt-realtime-translate` ($0.034 per minute). Your microphone uses `gpt-4o-transcribe`, $0.006
+per minute (`mic = "gpt-4o-mini-transcribe"` costs half and makes twice the errors). In a 1-hour
+call where the others talk half the time, that is about $1.90; at most $3.40 if they never stop.
+With sentence-by-sentence translation (`translate = "gpt-5.4-mini"`), about $0.90. Translation and
+suggestions with `gpt-5.4-mini` are a few hundred tokens each. The counter in the top bar shows the
+estimated cost of transcription and translation; hover over it to see the minutes sent.
+
+To spend ~6x less on the others' speech, set `transcribe = "gpt-4o-mini-transcribe"` in `[models]`.
+The text then only appears when the person stops talking.
+
+## Good to know
+
+- **Bluetooth:** while the microphone is open, the headset stays in the call profile (worse sound).
+  Pausing or closing Lingo releases the microphone.
+- **Call volume:** only what goes above `speech_level` (0.003) counts as voice. If the "eles"
+  (them) meter moves but no text appears, lower this value in `[audio]`; if noise turns into text,
+  raise it.
+- **Screen sharing:** the window shows up if you share the whole screen. Share only the call window.
+- **Privacy:** the call audio goes to OpenAI. Check whether that is allowed by your company and your
+  client before using it in meetings with other people.
+- **Fonts:** Lingo uses its own fontconfig cache (`~/.cache/lingo`), because Edge writes a cache in
+  a newer format to `~/.cache/fontconfig` that breaks apps with an older fontconfig.
+- **European Portuguese:** the live translator only accepts `pt`, with no variant, and sometimes
+  answers "Implementámos" instead of "Implementamos". There is no way to ask it for pt-BR.
+
+## Code
+
+Rust, with GTK4 ([gtk4-rs](https://gtk-rs.org)) on the main thread and the engine on
+[tokio](https://tokio.rs), in its own threads:
+
+| | |
+|---|---|
+| `src/engine.rs` | the engine: receives everything on a single queue (window commands, OpenAI events) and sends events to the window |
+| `src/realtime.rs` | Realtime API WebSockets (live transcription and translation), with reconnection |
+| `src/audio.rs` | capture with `pw-record` and the voice/silence gates |
+| `src/llm.rs`, `src/prompts.rs`, `src/text.rs` | streaming chat calls, prompts and parsing of the answers |
+| `src/ask.rs` | questions to Claude Code |
+| `src/ui/` | the window and the command line |
+
+The first version, in Python, is on the `python` branch.
+
+## Tests
 
 ```bash
 cargo test
 ```
 
-Para abrir uma segunda instância, sem mexer na que está aberta:
-`LINGO_APP_ID=dev.pedro.LingoTest LINGO_CONFIG=/caminho/config.toml target/release/lingo`.
+To open a second instance without touching the one that is open:
+`LINGO_APP_ID=dev.pedro.LingoTest LINGO_CONFIG=/path/to/config.toml target/release/lingo`.
 
-## Licença
+## License
 
-MIT. Veja [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

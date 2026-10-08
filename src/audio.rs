@@ -1,9 +1,9 @@
-//! Captura de áudio pelo PipeWire (`pw-record`), um processo por lado da conversa.
+//! Audio capture through PipeWire (`pw-record`), one process per side of the conversation.
 //!
-//! "eles" é o monitor da saída do sistema (o que você ouve na call) e "você" é o microfone.
-//! Sai PCM16 mono a 24 kHz, o formato que a Realtime API espera. Matar o processo libera o
-//! microfone, o que importa em headset Bluetooth: ele fica no perfil de chamada (HFP) enquanto
-//! alguém lê o microfone.
+//! The "eles" (them) stream is the monitor of the system output (what you hear in the call) and
+//! "voce" (you) is the microphone. Both come out as 16-bit mono PCM at 24 kHz, the format the
+//! Realtime API expects. Killing the process releases the microphone, which matters with Bluetooth
+//! headsets: they stay in the call profile (HFP) while something reads the microphone.
 
 use std::collections::VecDeque;
 use std::process::Stdio;
@@ -17,7 +17,7 @@ pub const RATE: u32 = 24_000;
 pub const CHUNK_MS: u32 = 100;
 pub const CHUNK_BYTES: usize = (RATE * 2 * CHUNK_MS / 1000) as usize;
 
-/// RMS normalizado em 0..1.
+/// RMS normalized to 0..1.
 pub fn rms_level(pcm: &[u8]) -> f32 {
     let samples = pcm.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f32);
     let (sum, count) = samples.fold((0.0f64, 0usize), |(sum, n), s| (sum + (s * s) as f64, n + 1));
@@ -45,8 +45,8 @@ pub fn pw_record_command(sink_monitor: bool, target: &str, label: &str) -> Vec<S
     cmd
 }
 
-/// Lê blocos de 100 ms do `pw-record` e reinicia o processo se ele morrer. Só volta se o
-/// `pw-record` não existir; para parar, aborte a tarefa (o processo morre junto).
+/// Reads 100 ms chunks from `pw-record` and restarts the process if it dies. Only returns if
+/// `pw-record` is missing; to stop it, abort the task (the process dies with it).
 pub async fn capture(
     label: &str,
     sink_monitor: bool,
@@ -99,12 +99,12 @@ pub struct Turn {
     pub commit: bool,
 }
 
-/// Para os modelos ao vivo, que não têm VAD no servidor: manda só os trechos com voz (o minuto
-/// custa ~6x mais) e decide quando fechar a frase.
+/// For the live models, which have no server-side VAD: sends only the stretches with voice (a minute
+/// costs ~6x more) and decides when to close the sentence.
 ///
-/// A frase fecha depois de `commit_ms` sem voz, ou de `long_commit_ms` quando já passou de
-/// `long_ms`, para um monólogo não virar um bloco só. Quando a voz volta, reenvia os últimos
-/// blocos para não cortar o começo da palavra.
+/// The sentence closes after `commit_ms` without voice, or after `long_commit_ms` once it has passed
+/// `long_ms`, so a monologue does not become a single block. When the voice comes back, it resends
+/// the last chunks so the start of the word is not cut off.
 pub struct TurnGate {
     speech_level: f32,
     commit_ms: u32,
@@ -132,7 +132,7 @@ impl TurnGate {
         }
     }
 
-    /// Há uma frase em andamento (alguém falando ou numa pausa curta).
+    /// A sentence is in progress (someone talking or in a short pause).
     pub fn is_open(&self) -> bool {
         self.open
     }
@@ -168,10 +168,10 @@ impl TurnGate {
     }
 }
 
-/// Para de enviar áudio depois de um tempo em silêncio (nada tocando).
+/// Stops sending audio after a while of silence (nothing playing).
 ///
-/// Antes de parar, deixa passar alguns segundos de silêncio para o outro lado fechar a frase.
-/// Ao voltar o som, reenvia os últimos blocos.
+/// Before stopping, it lets a few seconds of silence through so the other end can close the sentence.
+/// When sound returns, it resends the last chunks.
 pub struct SilenceGate {
     floor: f32,
     hold_chunks: usize,

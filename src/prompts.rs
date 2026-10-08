@@ -1,4 +1,4 @@
-//! Prompts de tradução, sugestão de resposta e "como digo isso?".
+//! Prompts for translation, reply suggestions and "how do I say this?".
 
 use crate::engine::Speaker;
 
@@ -29,7 +29,7 @@ pub fn notes_system(target: &str) -> String {
     )
 }
 
-/// Sem `gloss_lang` a call é no idioma nativo: nada de tradução nem de inglês simplificado.
+/// Without `gloss_lang` the call is in the native language: no translation and no simplified English.
 pub fn suggest_system(reply_lang: &str, gloss_lang: Option<&str>) -> String {
     let (who, style, output) = match gloss_lang {
         Some(gloss) => (
@@ -77,7 +77,7 @@ pub fn phrase_system(reply_lang: &str, gloss_lang: &str) -> String {
     )
 }
 
-/// Pergunta para o Claude Code: a digitada ou, sem ela, a fala marcada com >>>.
+/// Question for Claude Code: the typed one or, without it, the line marked with >>>.
 pub fn ask_prompt(question: &str, transcript: &str) -> String {
     let head = if question.is_empty() {
         "Na call acabaram de me perguntar a fala marcada com >>>. Diga o que eu preciso saber para responder."

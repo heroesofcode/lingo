@@ -1,11 +1,11 @@
-//! Limpeza de transcrição e leitura da saída (em streaming) dos modelos.
+//! Transcript cleanup and parsing of the models' (streaming) output.
 
 use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use regex::Regex;
 
-/// Frases que o modelo de transcrição "inventa" em silêncio ou ruído.
+/// Phrases the transcription model "makes up" in silence or noise.
 const HALLUCINATIONS: [&str; 11] = [
     "you",
     "thanks for watching",
@@ -62,11 +62,11 @@ fn space_or_end_after(text: &str, end: usize) -> bool {
     text[end..].chars().next().is_none_or(char::is_whitespace)
 }
 
-/// Separa as frases já terminadas do texto que ainda está chegando.
+/// Splits the finished sentences from the text that is still arriving.
 ///
-/// Frase comprida sem ponto é cortada na vírgula depois de 14 palavras; frase com menos de 3
-/// ("Pedro.", "Okay.") espera e vai junto com a seguinte. Devolve os pedaços e quantos bytes
-/// foram consumidos; com `is_final`, o resto também vira pedaço.
+/// A long sentence without a period is cut at a comma after 14 words; a sentence with fewer than 3
+/// ("Pedro.", "Okay.") waits and goes with the next one. Returns the pieces and how many bytes were
+/// consumed; with `is_final`, the rest also becomes a piece.
 pub fn take_sentences(text: &str, is_final: bool) -> (Vec<String>, usize) {
     const CLAUSE_WORDS: usize = 14;
     const MIN_WORDS: usize = 3;
@@ -84,7 +84,7 @@ pub fn take_sentences(text: &str, is_final: bool) -> (Vec<String>, usize) {
         if !space_or_end_after(text, m.end()) {
             continue;
         }
-        // "3." no fim ainda pode virar "3.5"
+        // "3." at the end may still become "3.5"
         let after_digit = text[..m.start()].chars().next_back().is_some_and(char::is_numeric);
         if !is_final && m.end() == text.len() && after_digit {
             break;
@@ -119,7 +119,7 @@ pub fn mentions(text: &str, names: &[String]) -> bool {
     })
 }
 
-/// Parecido com o `SequenceMatcher.ratio()` do Python (Ratcliff/Obershelp): 2·iguais / total.
+/// Similar to Python's `SequenceMatcher.ratio()` (Ratcliff/Obershelp): 2·matches / total.
 pub fn similar(a: &str, b: &str) -> f64 {
     let norm = |s: &str| -> Vec<char> { s.to_lowercase().chars().filter(|&c| is_word_char(c) || c == ' ').collect() };
     let (a, b) = (norm(a), norm(b));
@@ -159,7 +159,7 @@ pub struct ReplyOption {
     pub gloss: String,
 }
 
-/// Lê linhas `A|texto` / `a|tradução` (também a última, ainda incompleta).
+/// Reads `A|text` / `a|translation` lines (including the last one, still incomplete).
 pub fn parse_options(raw: &str) -> Vec<ReplyOption> {
     let mut options = vec![ReplyOption::default(); 3];
     for line in raw.lines() {
@@ -181,7 +181,7 @@ fn stems(text: &str) -> Vec<String> {
     WORD.find_iter(&text.to_lowercase()).map(|w| w.as_str().chars().take(4).collect()).collect()
 }
 
-/// Mantém só as expressões da nota que aparecem na própria frase, sem repetir.
+/// Keeps only the note's expressions that appear in the line itself, without repeats.
 pub fn filter_note(note: &str, line: &str) -> String {
     let line_stems: HashSet<String> = stems(line).into_iter().collect();
     let mut kept = Vec::new();
@@ -202,7 +202,7 @@ fn strip_note_prefix(line: &str) -> Option<&str> {
     line.get(..5).filter(|p| p.eq_ignore_ascii_case("NOTE:")).map(|_| line[5..].trim())
 }
 
-/// Resposta do prompt de notas: `NOTE: ...` ou `NONE`.
+/// Answer to the notes prompt: `NOTE: ...` or `NONE`.
 pub fn parse_note(raw: &str) -> String {
     raw.trim()
         .lines()
@@ -210,7 +210,7 @@ pub fn parse_note(raw: &str) -> String {
         .unwrap_or_default()
 }
 
-/// Primeira linha é a tradução; uma linha `NOTE:` opcional explica expressões.
+/// The first line is the translation; an optional `NOTE:` line explains expressions.
 pub fn split_translation(raw: &str) -> (String, String) {
     let lines: Vec<&str> = raw.trim().lines().map(str::trim).filter(|l| !l.is_empty()).collect();
     let Some(first) = lines.first() else { return (String::new(), String::new()) };

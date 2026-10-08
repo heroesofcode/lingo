@@ -1,4 +1,4 @@
-//! A janela: barra de cima, lista de falas, painéis e o campo de texto.
+//! The window: top bar, list of utterances, panels and the text field.
 
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
@@ -30,7 +30,7 @@ fn empty_text(mode: Mode) -> &'static str {
 }
 
 pub struct Window {
-    /// referência fraca a si mesma, para as closures dos sinais não manterem a janela viva
+    /// weak reference to itself, so the signal closures do not keep the window alive
     me: Weak<Window>,
     win: gtk::ApplicationWindow,
     cfg: Rc<Config>,
@@ -57,7 +57,7 @@ pub struct Window {
     pause_btn: gtk::ToggleButton,
 }
 
-/// `f` chamada com a janela, se ela ainda existir.
+/// Calls `f` with the window, if it still exists.
 fn with_window(me: &Weak<Window>, f: impl Fn(&Window) + 'static) -> impl Fn() + 'static {
     let me = me.clone();
     move || {
@@ -107,9 +107,9 @@ impl Window {
             let root = gtk::Box::new(gtk::Orientation::Vertical, 0);
             overlay.set_child(Some(&root));
 
-            // A barra cabe nos 470 px da regra do Hyprland. Se um texto pedisse mais largura, mesmo
-            // por um instante ("Conectando…"), o Hyprland alargaria a janela para fora da tela e não
-            // a estreitaria de volta; por isso os textos que variam encolhem com reticências.
+            // The bar fits in the 470 px of the Hyprland rule. If a text asked for more width, even for an
+            // instant ("Conectando…"), Hyprland would widen the window past the screen edge and never narrow
+            // it back; that is why the texts that change shrink with an ellipsis instead.
             let bar = gtk::Box::new(gtk::Orientation::Horizontal, 3);
             bar.add_css_class("topbar");
             let dot = label("●", &["dot"], false);
@@ -155,7 +155,7 @@ impl Window {
                 clear_btn.upcast_ref(),
             ];
             for button in buttons {
-                // Tudo tem atalho; sem foco de teclado o primeiro botão não abre com cara de selecionado.
+                // Everything has a shortcut; without keyboard focus the first button does not open looking selected.
                 button.set_focusable(false);
                 bar.append(button);
             }
@@ -207,7 +207,7 @@ impl Window {
                     }
                 }
             });
-            // "page-size" muda quando um painel abre ou fecha
+            // "page-size" changes when a panel opens or closes
             for property in ["upper", "page-size"] {
                 let me = me.clone();
                 adj.connect_notify_local(Some(property), move |adj, _| {
@@ -369,7 +369,7 @@ impl Window {
         if text.is_empty() {
             return;
         }
-        // Na call no seu idioma não há "como digo"; o campo serve só para perguntar ao Claude.
+        // In a call in your own language there is no "how do I say"; the field is only for asking Claude.
         if self.mode.get() == Mode::Native || text.starts_with('?') {
             let question = text.trim_start_matches('?').trim().to_string();
             if !question.is_empty() {
@@ -398,7 +398,7 @@ impl Window {
         let me = self.me.clone();
         let source = glib::timeout_add_local_once(Duration::from_secs_f64(seconds), move || {
             if let Some(window) = me.upgrade() {
-                window.toast_source.borrow_mut().take(); // já disparou: não remover de novo
+                window.toast_source.borrow_mut().take(); // already fired: do not remove it again
                 window.toast.set_visible(false);
             }
         });
@@ -452,7 +452,7 @@ impl Window {
         if !row.is_cont()
             && let Some((_, next)) = rows.get_index(index)
         {
-            next.set_cont(false); // a seguinte vira o começo do bloco
+            next.set_cont(false); // the next one becomes the start of the block
         }
     }
 

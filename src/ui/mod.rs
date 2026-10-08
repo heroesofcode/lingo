@@ -1,4 +1,4 @@
-//! Interface GTK4 e a linha de comando (`lingo --toggle` etc. falam com a janela já aberta).
+//! GTK4 interface and the command line (`lingo --toggle` etc. talk to the window that is already open).
 
 mod widgets;
 mod window;
@@ -28,7 +28,7 @@ const USAGE: &str = "Uso: lingo [opção]
 ";
 const OPTIONS: [&str; 7] = ["--toggle", "--suggest", "--ask", "--pause", "--mic", "--mode", "--quit"];
 
-/// O motor roda no tokio, em threads próprias; a janela fica na thread principal, com o GTK.
+/// The engine runs on tokio, in its own threads; the window stays on the main thread, with GTK.
 fn runtime() -> &'static tokio::runtime::Runtime {
     static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
     RUNTIME.get_or_init(|| {
@@ -48,7 +48,7 @@ struct State {
 }
 
 pub fn run() -> glib::ExitCode {
-    // LINGO_APP_ID permite abrir uma segunda instância (para testes) sem mexer na que está aberta.
+    // LINGO_APP_ID lets you open a second instance (for tests) without touching the one that is open.
     let app_id = std::env::var("LINGO_APP_ID").unwrap_or_else(|_| APP_ID.to_string());
     let app =
         gtk::Application::builder().application_id(app_id).flags(gio::ApplicationFlags::HANDLES_COMMAND_LINE).build();
@@ -115,7 +115,7 @@ fn activate(app: &gtk::Application, state: &Rc<State>) {
 fn command_line(app: &gtk::Application, cmdline: &gio::ApplicationCommandLine, state: &Rc<State>) -> glib::ExitCode {
     let args: Vec<String> = cmdline.arguments().iter().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
     let first = state.window.borrow().is_none();
-    // Sem janela aberta, --help e --quit respondem sem abrir o Lingo (e o microfone).
+    // With no window open, --help and --quit answer without opening Lingo (and the microphone).
     match args.first().map(String::as_str) {
         Some("-h" | "--help") => {
             cmdline.print_literal(USAGE);

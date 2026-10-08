@@ -1,8 +1,8 @@
-//! Transcrição e tradução em tempo real pela Realtime API da OpenAI.
+//! Real-time transcription and translation through OpenAI's Realtime API.
 //!
-//! Um WebSocket por fluxo de áudio. Nos modelos ao vivo (gpt-live-transcribe, gpt-realtime-whisper)
-//! o texto chega palavra a palavra e quem fecha a frase é o cliente (`TurnGate`); nos outros, o
-//! servidor detecta o fim da frase (server VAD) e só então transcreve. Reconecta sozinho se cair.
+//! One WebSocket per audio stream. With the live models (gpt-live-transcribe, gpt-realtime-whisper)
+//! the text arrives word by word and the client closes the sentence (`TurnGate`); with the others,
+//! the server detects the end of the sentence (server VAD) and only then transcribes. Reconnects on its own.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -21,7 +21,7 @@ use tokio_tungstenite::tungstenite::{self, Message, client::IntoClientRequest, h
 use crate::audio::RATE;
 
 const STREAMING_MODELS: [&str; 2] = ["gpt-live-transcribe", "gpt-realtime-whisper"];
-const QUEUE_CAP: usize = 60; // ~6 s de áudio enquanto reconecta
+const QUEUE_CAP: usize = 60; // ~6 s of audio while reconnecting
 const CREATED: [&str; 2] = ["session.created", "transcription_session.created"];
 const UPDATED: [&str; 2] = ["session.updated", "transcription_session.updated"];
 
@@ -29,8 +29,8 @@ pub fn is_streaming(model: &str) -> bool {
     STREAMING_MODELS.iter().any(|m| model.starts_with(m))
 }
 
-/// O prompt dos modelos com VAD no servidor precisa estar no idioma da call: a mesma instrução
-/// em inglês numa call em português dobrou os erros nos testes.
+/// The prompt of the server-VAD models must be in the call's language: the same instruction in
+/// English in a Portuguese call doubled the errors in the tests.
 fn prompt_rule(code: &str) -> (&'static str, &'static str) {
     match code {
         "pt" => {
@@ -101,7 +101,7 @@ pub fn session_update(args: &SessionArgs, languages: &[String]) -> Value {
     json!({ "type": "session.update", "session": { "type": "transcription", "audio": { "input": input } } })
 }
 
-/// Sem "transcription": o original já vem do outro WebSocket; assim não se paga duas vezes.
+/// No "transcription": the original already comes from the other WebSocket, so it is not paid for twice.
 pub fn translation_update(language: &str) -> Value {
     let code = language.split('-').next().unwrap_or(language).to_lowercase();
     json!({ "type": "session.update", "session": { "audio": { "output": { "language": code } } } })
@@ -136,12 +136,12 @@ pub enum SocketEvent {
 
 pub enum Item {
     Audio(Vec<u8>),
-    /// fecha a frase (modelos sem VAD no servidor)
+    /// closes the sentence (models without server-side VAD)
     Commit,
     Update(Value),
 }
 
-/// Fila de envio que descarta o mais antigo quando enche (conexão caída).
+/// Send queue that drops the oldest item when it is full (connection down).
 pub struct SendQueue {
     items: Mutex<VecDeque<Item>>,
     ready: Notify,
@@ -175,12 +175,12 @@ impl SendQueue {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Role {
     Transcriber,
-    /// gpt-realtime-translate: o texto traduzido sai ~2 s atrás da fala, corrido, sem marcar fim de
-    /// frase nem de fala; quem decide onde ele aparece é o motor. O áudio traduzido é ignorado.
+    /// gpt-realtime-translate: the translated text comes out ~2 s behind the speech, as running text that
+    /// marks neither sentence nor utterance ends; the engine decides where it appears. The translated audio is ignored.
     Translator,
 }
 
-/// Uma conexão aberta em segundo plano. Soltar o `Socket` encerra a conexão.
+/// A connection open in the background. Dropping the `Socket` closes it.
 pub struct Socket {
     pub model: String,
     pub queue: Arc<SendQueue>,
@@ -217,7 +217,7 @@ impl Socket {
         self.bytes_sent.load(Ordering::Relaxed) as f64 / (RATE as f64 * 2.0)
     }
 
-    /// Troca a configuração da sessão aberta, sem reconectar (e vale para a próxima conexão).
+    /// Changes the configuration of the open session without reconnecting (it also applies to the next connection).
     pub fn set_update(&self, update: Value) {
         *self.update.lock().unwrap() = update.clone();
         self.queue.push(Item::Update(update));
@@ -231,7 +231,7 @@ impl Drop for Socket {
 }
 
 enum Failure {
-    /// não adianta tentar de novo logo (chave inválida, modelo inexistente)
+    /// no point retrying right away (invalid key, nonexistent model)
     Fatal(String),
     Http(u16),
     Net(String),

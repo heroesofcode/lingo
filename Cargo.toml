@@ -3,7 +3,7 @@ name = "lingo"
 version = "0.2.0"
 edition = "2024"
 rust-version = "1.92"
-description = "Tradução ao vivo e sugestões de resposta em calls, para Linux (GTK4 + PipeWire)"
+description = "Live translation and reply suggestions for calls, on Linux (GTK4 + PipeWire)"
 license = "MIT"
 
 [dependencies]
