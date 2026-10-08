@@ -485,8 +485,14 @@ impl Window {
         self.entry.set_placeholder_text(Some(if native {
             "Pergunte ao Claude e Enter"
         } else {
-            "Como digo…? em português · ?pergunta ao Claude"
+            "Como digo…? escreva em português e Enter"
         }));
+        // the "?" prefix does not fit in the hint without turning it into a riddle
+        self.entry.set_tooltip_text(if native {
+            None
+        } else {
+            Some("Comece com ? para perguntar ao Claude (ex.: ?qual versão da lib o checkout usa)")
+        });
         self.empty.set_label(empty_text(mode));
         if native {
             self.win.add_css_class("native");
