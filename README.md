@@ -83,16 +83,25 @@ sessão no histórico. O conteúdo da call vai para o Claude Code, não para a O
 
 ## Instalar
 
-Precisa de `pw-record` (PipeWire), Python 3.12 com PyGObject/GTK4, `websockets`, `aiohttp` e
-`numpy`, e de uma chave da OpenAI.
+Precisa de PipeWire (`pw-record`), GTK 4.14 ou mais novo, GLib 2.80 ou mais nova, Rust 1.92 ou
+mais novo ([rustup](https://rustup.rs)) e uma chave da OpenAI. Para compilar:
 
 ```bash
-tools/install.sh   # comando, .desktop e regras do Hyprland
+sudo apt install build-essential pkg-config libgtk-4-dev libssl-dev   # Ubuntu 24.04 / Debian
+sudo pacman -S --needed base-devel gtk4 openssl                        # Arch / Omarchy
+```
+
+Depois:
+
+```bash
+tools/install.sh   # compila, instala em ~/.local/bin/lingo, cria o .desktop e as regras do Hyprland
 mkdir -p ~/.config/lingo
 (umask 077; read -rsp "chave da OpenAI: " k && echo "$k" > ~/.config/lingo/openai_key)
 ```
 
-A chave também pode vir da variável `OPENAI_API_KEY`.
+A chave também pode vir da variável `OPENAI_API_KEY`. Se algum atalho `SUPER+ALT` já fizer outra
+coisa no seu Hyprland (no Omarchy, por exemplo), o `install.sh` o deixa comentado em
+`~/.config/hypr/lingo.conf` e avisa.
 
 ## Usar
 
@@ -122,7 +131,8 @@ US$ 0,006 por minuto (`mic = "gpt-4o-mini-transcribe"` custa metade e erra o dob
 1 hora em que os outros falam metade do tempo, dá uns US$ 1,90; no máximo US$ 3,40 se falarem sem
 parar. Com a tradução frase a frase (`translate = "gpt-5.4-mini"`), uns US$ 0,90.
 Tradução e sugestões com `gpt-5.4-mini` são poucas centenas de tokens cada. O contador da barra
-de cima mostra os minutos enviados e o custo estimado da transcrição.
+de cima mostra o custo estimado da transcrição e da tradução; com o mouse em cima, os minutos
+enviados.
 
 Para gastar ~6x menos na fala dos outros, ponha `transcribe = "gpt-4o-mini-transcribe"` em
 `[models]`. O texto volta a aparecer só quando a pessoa para de falar.
@@ -137,14 +147,35 @@ Para gastar ~6x menos na fala dos outros, ponha `transcribe = "gpt-4o-mini-trans
   janela da call.
 - **Privacidade:** o áudio da call vai para a OpenAI. Veja se isso é permitido na empresa e no
   cliente antes de usar em reuniões com outras pessoas.
-- **Fontes:** `bin/lingo` usa um cache de fontconfig só seu (`~/.cache/lingo`), porque o Edge grava
+- **Fontes:** o Lingo usa um cache de fontconfig só seu (`~/.cache/lingo`), porque o Edge grava
   um cache em formato novo em `~/.cache/fontconfig` que bagunça apps com fontconfig mais antigo.
+- **Tradução em português de Portugal:** o tradutor ao vivo só aceita `pt`, sem variante, e às
+  vezes responde "Implementámos" em vez de "Implementamos". Não há como pedir pt-BR para ele.
+
+## Código
+
+Rust, com GTK4 ([gtk4-rs](https://gtk-rs.org)) na thread principal e o motor no
+[tokio](https://tokio.rs), em threads próprias:
+
+| | |
+|---|---|
+| `src/engine.rs` | o motor: recebe tudo numa fila só (comandos da janela, eventos da OpenAI) e manda eventos para a janela |
+| `src/realtime.rs` | WebSockets da Realtime API (transcrição e tradução ao vivo), com reconexão |
+| `src/audio.rs` | captura com `pw-record` e os portões de voz/silêncio |
+| `src/llm.rs`, `src/prompts.rs`, `src/text.rs` | chamadas de chat em streaming, prompts e leitura das respostas |
+| `src/ask.rs` | perguntas ao Claude Code |
+| `src/ui/` | a janela e a linha de comando |
+
+A primeira versão, em Python, está no branch `python`.
 
 ## Testes
 
 ```bash
-python3 -m unittest discover -s tests -t .
+cargo test
 ```
+
+Para abrir uma segunda instância, sem mexer na que está aberta:
+`LINGO_APP_ID=dev.pedro.LingoTest LINGO_CONFIG=/caminho/config.toml target/release/lingo`.
 
 ## Licença
 

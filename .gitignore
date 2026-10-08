@@ -1,8 +1,6 @@
-__pycache__/
-*.pyc
-.venv/
+/target
 *.wav
-*.raw
+*.pcm
 # Nunca versionar a chave
 openai_key
 *.key

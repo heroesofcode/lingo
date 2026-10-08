@@ -10,7 +10,7 @@ window.lingo {
   background-color: #181926;
   border-bottom: 1px solid #363a4f;
 }
-.topbar button { min-width: 30px; min-height: 30px; padding: 2px; }
+.topbar button { min-width: 26px; min-height: 30px; padding: 2px; }
 .topbar button:checked { background-color: #494d64; }
 .topbar button.mode { padding: 2px 6px; font-size: 12px; font-weight: bold; color: #8bd5ca; }
 window.lingo.native .topbar button.mode { color: #a6da95; }
