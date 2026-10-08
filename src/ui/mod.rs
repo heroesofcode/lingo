@@ -26,6 +26,7 @@ const USAGE: &str = "Uso: lingo [opção]
   --mode       troca entre traduzir e call no seu idioma (sem tradução)
   --quit       fecha o Lingo
 ";
+const OPTIONS: [&str; 7] = ["--toggle", "--suggest", "--ask", "--pause", "--mic", "--mode", "--quit"];
 
 /// O motor roda no tokio, em threads próprias; a janela fica na thread principal, com o GTK.
 fn runtime() -> &'static tokio::runtime::Runtime {
@@ -114,6 +115,19 @@ fn activate(app: &gtk::Application, state: &Rc<State>) {
 fn command_line(app: &gtk::Application, cmdline: &gio::ApplicationCommandLine, state: &Rc<State>) -> glib::ExitCode {
     let args: Vec<String> = cmdline.arguments().iter().skip(1).map(|a| a.to_string_lossy().into_owned()).collect();
     let first = state.window.borrow().is_none();
+    // Sem janela aberta, --help e --quit respondem sem abrir o Lingo (e o microfone).
+    match args.first().map(String::as_str) {
+        Some("-h" | "--help") => {
+            cmdline.print_literal(USAGE);
+            return glib::ExitCode::SUCCESS;
+        }
+        Some("--quit") if first => return glib::ExitCode::SUCCESS,
+        Some(other) if !OPTIONS.contains(&other) => {
+            cmdline.printerr_literal(&format!("opção desconhecida: {other}\n{USAGE}"));
+            return glib::ExitCode::from(2);
+        }
+        _ => {}
+    }
     if first {
         app.activate();
     }
@@ -129,7 +143,6 @@ fn command_line(app: &gtk::Application, cmdline: &gio::ApplicationCommandLine, s
                 window.present();
             }
         }
-        Some("-h" | "--help") => cmdline.print_literal(USAGE),
         Some("--toggle") => {
             if !first {
                 window.toggle_visible();
@@ -147,10 +160,7 @@ fn command_line(app: &gtk::Application, cmdline: &gio::ApplicationCommandLine, s
         Some("--mic") => window.toggle_mic(),
         Some("--mode") => window.toggle_mode(),
         Some("--quit") => app.quit(),
-        Some(other) => {
-            cmdline.printerr_literal(&format!("opção desconhecida: {other}\n{USAGE}"));
-            return glib::ExitCode::from(2);
-        }
+        Some(_) => {}
     }
     glib::ExitCode::SUCCESS
 }
