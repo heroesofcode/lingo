@@ -1,6 +1,6 @@
 /* Catppuccin Macchiato */
 window.lingo {
-  background-color: alpha(#1e2030, 0.95);
+  background-color: #1e2030;
   color: #cad3f5;
   font-size: 15px;
 }
@@ -67,6 +67,8 @@ window.lingo.native .text-they { font-size: 16px; }
 .opt-gloss { color: #a5adcb; font-size: 12px; margin-top: 1px; }
 
 .composer { margin: 0 10px 10px 10px; }
+.side.wide { border-left: 1px solid #363a4f; padding-top: 8px; }
+.side-hint { color: #6e738d; font-size: 14px; margin: 40px 24px; }
 .composer entry { min-height: 36px; border-radius: 10px; background-color: #24273a; color: #cad3f5; }
 
 .toast {

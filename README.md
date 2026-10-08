@@ -1,6 +1,6 @@
 # Lingo
 
-A small always-on-top window for calls in English, made for Portuguese speakers:
+A window for calls in English, made for Portuguese speakers:
 
 - shows what the others say while they speak (each word appears ~1 s after it is said), with the
   Portuguese translation ~2 s behind the speech, and explains expressions such as *circle back* or
@@ -15,8 +15,10 @@ only transcribes, without translation, and the suggested replies come in Portugu
 
 The interface is in Brazilian Portuguese for now.
 
-Made for Linux with PipeWire. The window is native GTK4 on Wayland; on Hyprland it floats, stays
-pinned on every workspace and has global shortcuts.
+Made for Linux with PipeWire. The window is native GTK4 and opens like any other app (tiled, on
+Hyprland). It adapts to its width: below 460 px the top bar gets compact, and from 900 px on the
+suggestions, Claude's answers and the text field move to a column on the right of the conversation.
+On Hyprland it also has global shortcuts.
 
 ## How it works
 
@@ -112,7 +114,7 @@ something else in your Hyprland (on Omarchy, for example), `install.sh` comments
 
 | | |
 |---|---|
-| `SUPER+ALT+L` | open / show / hide |
+| `SUPER+ALT+L` | focus Lingo, or open it |
 | `SUPER+ALT+R` | suggest replies to the latest utterance |
 | `SUPER+ALT+P` | pause / resume (pausing releases the microphone) |
 | `SUPER+ALT+A` or `Ctrl+K` | ask Claude about the latest utterance |
