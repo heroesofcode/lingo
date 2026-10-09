@@ -19,7 +19,7 @@ pub const CHUNK_BYTES: usize = (RATE * 2 * CHUNK_MS / 1000) as usize;
 
 /// RMS normalized to 0..1.
 pub fn rms_level(pcm: &[u8]) -> f32 {
-    let samples = pcm.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f32);
+    let samples = pcm.as_chunks::<2>().0.iter().map(|&b| i16::from_le_bytes(b) as f32);
     let (sum, count) = samples.fold((0.0f64, 0usize), |(sum, n), s| (sum + (s * s) as f64, n + 1));
     if count == 0 {
         return 0.0;

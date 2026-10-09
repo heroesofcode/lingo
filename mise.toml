@@ -1,0 +1,41 @@
+# Development tasks. CI runs these same tasks, one per job, so a check that
+# passes here is the check that passes there.
+#
+# `--locked` everywhere Cargo resolves, as in CI: the lock file that is
+# committed is the one that is built and tested. After editing Cargo.toml by
+# hand, `cargo build` once to update it.
+#
+# None is called `fmt`: `mise fmt` is mise's own formatter for this file, so
+# that name would be reachable only as `mise run fmt`.
+
+[tasks.build]
+description = "Build in release mode"
+run = "cargo build --release --workspace --locked"
+
+[tasks.check]
+description = "rustfmt, clippy with warnings denied, and the tests"
+run = [{ task = "rustfmt" }, { task = "clippy" }, { task = "test" }]
+
+[tasks.rustfmt]
+description = "Check formatting"
+run = "cargo fmt --all --check"
+
+[tasks.clippy]
+description = "Clippy over every target, with warnings denied"
+run = "cargo clippy --workspace --all-targets --all-features --locked -- -D warnings"
+
+[tasks.test]
+description = "The test suite"
+run = "cargo test --workspace --all-features --locked"
+
+[tasks.audit]
+description = "Supply chain, spelling and unused dependencies (needs cargo-deny, cargo-machete and typos)"
+run = ["cargo deny --locked check", "cargo machete", "typos"]
+
+[tasks.install]
+description = "Build and install for the current user (binary, .desktop entry, Hyprland shortcuts)"
+run = "tools/install.sh"
+
+[tasks.clean]
+description = "Remove the build output"
+run = "cargo clean"

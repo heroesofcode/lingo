@@ -1,0 +1,54 @@
+# Supply-chain policy, enforced by `cargo deny check` in CI.
+#
+# Lingo holds the user's OpenAI key and hears every call it is open for. What
+# it is built from is part of that trust, not housekeeping: a dependency is
+# code that runs with the key and the audio within reach.
+
+[graph]
+# Linux is the only platform Lingo builds for (PipeWire, GTK 4). Without this,
+# the Windows and macOS halves of the dependency tree are counted too, and an
+# advisory or a licence on a crate that is never compiled here would block a
+# change that cannot reach it.
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+all-features = true
+
+[advisories]
+# A yanked release was pulled for a reason, and that reason is rarely
+# published alongside it.
+yanked = "deny"
+# Spelled out rather than left to the defaults, which differ: unmaintained
+# crates fail at any depth, but unsound ones only when Lingo depends on them
+# directly — so an unsound crate deep in the GTK bindings would pass.
+# Vulnerabilities fail at any depth whatever is set here. The weekly
+# scheduled run is what notices a new advisory without a pull request.
+unsound = "all"
+unmaintained = "all"
+
+[licenses]
+# The permissive licences the dependency tree uses today. Several crates are
+# dual-licensed; cargo-deny takes the arm that is on this list. A licence that
+# is not here yet is a decision, and is made by adding it.
+allow = [
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "MIT",
+    "Unicode-3.0",
+    "Unlicense",
+]
+confidence-threshold = 0.93
+
+[bans]
+# The GTK bindings and the async stack each pull their own versions of a few
+# crates, and none of them is Lingo's to choose. Denying duplicates would
+# block every update; warning keeps them visible.
+multiple-versions = "warn"
+# A `*` version requirement takes whatever is newest on the day of the build.
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[sources]
+# Everything comes from crates.io. A git dependency or a second registry is a
+# decision, and has to be made here, deliberately.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

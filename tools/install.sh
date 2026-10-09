@@ -4,11 +4,14 @@ set -euo pipefail
 root="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
 bin="$HOME/.local/bin/lingo"
 
-if ! command -v cargo >/dev/null; then
-  echo "cargo não encontrado: instale o Rust (https://rustup.rs) e rode de novo" >&2
-  exit 1
+# A release tarball has no source: the binary is already where cargo would put it.
+if [ -f "$root/Cargo.toml" ]; then
+  if ! command -v cargo >/dev/null; then
+    echo "cargo não encontrado: instale o Rust (https://rustup.rs) e rode de novo" >&2
+    exit 1
+  fi
+  cargo build --release --manifest-path "$root/Cargo.toml"
 fi
-cargo build --release --manifest-path "$root/Cargo.toml"
 [ -L "$bin" ] && rm -f "$bin" # the Python version installed a symlink
 install -Dm755 "$root/target/release/lingo" "$bin"
 mkdir -p "$HOME/.local/share/applications"

@@ -1,0 +1,191 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# Automated pull request review, by CodeRabbit (free for public repositories).
+#
+# CI already proves what can be proved mechanically: formatting, clippy, tests,
+# the supply-chain policy, the minimum Rust version. What it cannot prove is
+# that a change keeps what Lingo promises in the README: what leaves the
+# machine and where it goes, how fast the words appear, what a call costs, and
+# that the window works at any width. That is what this review is pointed at.
+
+language: en-US
+tone_instructions: >-
+  Be direct and specific. Cite the invariant or the file a concern comes from.
+  Skip praise and restating the diff. If something is fine, say nothing.
+
+knowledge_base:
+  code_guidelines:
+    enabled: true
+    filePatterns:
+      - README.md
+
+chat:
+  auto_reply: true
+
+reviews:
+  profile: chill
+  # Request changes while findings are open, and approve once the latest
+  # commit has been reviewed, every comment is resolved and no pre-merge check
+  # fails. That approval is the one signal that the review of the current
+  # commit is finished.
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  in_progress_fortune: false
+  sequence_diagrams: false
+  suggested_reviewers: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    # release-please's own pull requests are a version bump and a changelog
+    # it generated from titles that were already reviewed. Matched by author,
+    # not by title: a title keyword matches anywhere in the title, so an
+    # ordinary pull request could mention it and skip the review. With
+    # RELEASE_PLEASE_TOKEN set they are opened by its owner instead, and are
+    # reviewed like any other.
+    ignore_usernames:
+      - "github-actions[bot]"
+
+  path_filters:
+    - "!Cargo.lock"
+    - "!CHANGELOG.md"
+    - "!.release-please-manifest.json"
+    - "!target/**"
+
+  path_instructions:
+    - path: "src/engine.rs"
+      instructions: |
+        The engine is a single task: window commands, WebSocket events and
+        model answers arrive on one queue and are handled one at a time, so
+        its state needs no locks. Flag new state shared through `Arc<Mutex>`
+        or atomics that the engine task could own and update from a message
+        instead; the capture side's handles are the exception, because the
+        audio threads feed them. Slow work (a model call, Claude) runs in a
+        spawned task that reports back as a message or an `Event`, never
+        awaited inline where it would hold up the queue.
+
+    - path: "src/realtime.rs"
+      instructions: |
+        One WebSocket per audio stream, reconnecting on its own. Flag a
+        failure that ends a stream for good when a reconnect would do, and
+        the reverse: retrying forever on an error that cannot heal, such as a
+        rejected key. The key goes in the `Authorization` header and nowhere
+        else; flag it reaching a log line, an error message or a URL.
+
+    - path: "src/audio.rs"
+      instructions: |
+        Only stretches with voice are sent, because OpenAI bills per minute
+        sent. Flag anything that would send silence or noise beyond what is
+        there today (the translator's trailing silence is deliberate). Pausing
+        or closing kills `pw-record`, which is what releases the microphone
+        and takes a Bluetooth headset out of the call profile; flag anything
+        that keeps the microphone open while paused.
+
+    - path: "src/ask.rs"
+      instructions: |
+        Claude Code runs with read-only tools (`Read,Grep,Glob`) and
+        `--no-session-persistence`, because the prompt carries what someone
+        said in a call. Flag any tool that can write, edit, fetch or run
+        commands, any permission flag that widens that, and dropping
+        `--no-session-persistence`.
+
+    - path: "src/config.rs"
+      instructions: |
+        The OpenAI key comes from ~/.config/lingo/openai_key or
+        OPENAI_API_KEY. Flag the key being logged, copied to another file or
+        included in an error. Saving transcripts is opt-in
+        (`save_transcripts = false`); flag a default that writes call content
+        to disk.
+
+    - path: "{src/prompts.rs,src/text.rs}"
+      instructions: |
+        text.rs parses what the prompts ask the model to produce, while it
+        streams. A change to the expected shape of an answer (the three
+        options, the idiom notes, labels) has to change both files and the
+        tests in text.rs together.
+
+    - path: "src/ui/**"
+      instructions: |
+        GTK runs on the main thread and must never block: no network, no
+        process, no `block_on` (shutdown is the one exception). Work goes to
+        the engine as a command and comes back as an `Event`.
+        The window lives in a tiling window manager. The layout changes at
+        `COMPACT_BELOW` and `WIDE_FROM` in window.rs; flag a width written as
+        a literal elsewhere, and degradation by clipping or a horizontal
+        scrollbar instead of rearranging. Interface text is Brazilian
+        Portuguese.
+
+    - path: ".github/workflows/**"
+      instructions: |
+        - Every `uses:` is pinned to a full commit SHA with a version comment.
+        - Permissions are granted per job, at the minimum, and the workflow
+          default is read-only or none.
+        - No `${{ }}` expansion inside `run:`; pass values through `env:`.
+        - Main requires two checks: the `ci` job in ci.yml, whose name must
+          not change and whose `needs` must list every other CI job, and the
+          `pull request title` job in pr-title.yml.
+
+    - path: "{deny.toml,Cargo.toml}"
+      instructions: |
+        Flag any change that loosens the supply-chain policy — an advisory
+        ignored, a licence or a source allowed, a lint lowered — unless the
+        pull request says why. A new dependency deserves a sentence on what it
+        is for and why the standard library or an existing dependency does not
+        do it.
+
+    - path: "**/*.rs"
+      instructions: |
+        Comments explain why, not what; a comment restating the line below is
+        noise. If a change alters behaviour the README describes — a shortcut,
+        a latency figure, a cost, what is sent where — the README changes in
+        the same pull request.
+
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
+    title:
+      mode: warning
+      requirements: >-
+        A Conventional Commit, because release-please builds the changelog and
+        the version from squash-merged titles: `type(optional scope): summary`,
+        with type one of feat, fix, docs, chore, refactor, perf, test, build,
+        ci, style or revert, and a lowercase summary in the imperative.
+    issue_assessment:
+      mode: "off"
+    custom_checks:
+      - name: Privacy
+        mode: error
+        instructions: |
+          Fail if the pull request does any of the following without saying
+          why in its description:
+          1. Sends call audio or transcripts to a service other than OpenAI,
+             or questions to anything other than the local Claude Code.
+          2. Writes the OpenAI key anywhere but the HTTP and WebSocket
+             `Authorization` headers: a log, an error, a file, a URL.
+          3. Gives Claude Code, in src/ask.rs, a tool beyond Read, Grep and
+             Glob, or lets it save the session.
+          4. Writes call content to disk when `save_transcripts` is off.
+          Pass otherwise.
+
+  tools:
+    # CI runs clippy with the system libraries GTK needs; a second run
+    # without them would only report build failures.
+    clippy:
+      enabled: false
+    # Prose nitpicks on documentation written in a deliberate style, and on
+    # interface text in Portuguese.
+    languagetool:
+      enabled: false
+    markdownlint:
+      enabled: false
+    gitleaks:
+      enabled: true
+    zizmor:
+      enabled: true
+    actionlint:
+      enabled: true
+    shellcheck:
+      enabled: true
+    osvScanner:
+      enabled: true

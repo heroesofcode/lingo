@@ -110,6 +110,12 @@ The key can also come from the `OPENAI_API_KEY` variable. If a `SUPER+ALT` short
 something else in your Hyprland (on Omarchy, for example), `install.sh` comments it out in
 `~/.config/hypr/lingo.conf` and tells you.
 
+Each [release](https://github.com/heroesofcode/lingo/releases) also has a tarball with the binary
+already built, on Ubuntu 24.04, so it runs there and on newer systems. Inside it, `tools/install.sh`
+installs that binary instead of building one, so Rust is not needed. To check that it was built by
+this repository's workflow, from the tagged commit:
+`gh attestation verify lingo-*.tar.gz --repo heroesofcode/lingo`.
+
 ## Use
 
 | | |
@@ -179,6 +185,8 @@ The first version, in Python, is the repository's first commit (`52a9e3e`).
 ```bash
 cargo test
 ```
+
+`mise run check` runs rustfmt, clippy and the tests the way CI does; `mise tasks` lists the rest.
 
 To open a second instance without touching the one that is open:
 `LINGO_APP_ID=dev.pedro.LingoTest LINGO_CONFIG=/path/to/config.toml target/release/lingo`.
