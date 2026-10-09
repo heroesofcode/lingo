@@ -1,0 +1,134 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+  # So the binary can be rebuilt for a tag that already exists, which is the
+  # only way to repair a release whose upload failed.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and attach the binary to
+        required: true
+        type: string
+
+# Nothing by default. Each job asks for what it uses, so the one that only
+# builds cannot also rewrite pull requests.
+permissions: {}
+
+# Two pushes in quick succession must not race to cut the same release.
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: release pull request
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    timeout-minutes: 10
+    permissions:
+      contents: write # commit the version bump, create the tag and release
+      pull-requests: write # open and update the release pull request
+    outputs:
+      released: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
+        with:
+          # GitHub does not trigger workflows for events raised by the
+          # default token, so the release pull request opens without the
+          # `ci` check that main requires. Closing and reopening it is the
+          # no-secret way to get the check to run; a PAT here avoids that.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  binaries:
+    # Same reason, one step further on: a `release: published` event raised
+    # by the default token does not start a separate workflow either, so the
+    # binary is built here, in the run that created the release, rather than
+    # in one waiting to be triggered by it.
+    name: release binaries
+    needs: [release-please]
+    if: always() && (needs.release-please.outputs.released == 'true' || github.event_name == 'workflow_dispatch')
+    # Not ubuntu-latest: the binary needs at least the glibc and the GTK of
+    # the system it was built on, and 24.04 is the oldest one the README
+    # supports.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write # upload the tarball and its checksum to the release
+      id-token: write # the OIDC token that signs the provenance attestation
+      attestations: write # store that attestation against the repository
+    env:
+      TAG: ${{ inputs.tag || needs.release-please.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.TAG }}
+          persist-credentials: false
+
+      # Inline rather than the shared action in .github/actions: this job
+      # checks out the tag being built, and the action may not be the same,
+      # or exist at all, at that tag.
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgtk-4-dev libssl-dev
+
+      - run: rustup toolchain install
+
+      # No build cache. What ships holds the user's OpenAI key and hears
+      # their calls, and it is built from the tagged source alone, with
+      # nothing carried over from an earlier run.
+      - name: Build
+        run: cargo build --release --locked
+
+      - name: Package
+        id: package
+        run: |
+          staging="lingo-${TAG#v}-x86_64-linux"
+          # The binary goes where tools/install.sh looks for it, so that
+          # running it inside the extracted tarball installs the prebuilt
+          # binary instead of building one.
+          mkdir -p "$staging/target/release"
+          cp target/release/lingo "$staging/target/release/"
+          cp -r data tools README.md LICENSE "$staging/"
+          tar -czf "${staging}.tar.gz" "$staging"
+          sha256sum "${staging}.tar.gz" > "${staging}.tar.gz.sha256"
+          echo "tarball=${staging}.tar.gz" >> "$GITHUB_OUTPUT"
+
+      # The attestation names the commit this run was started from, not the
+      # one checked out. On a release those are the same commit. On a manual
+      # rebuild of an older tag dispatched from main they are not, and an
+      # attestation then would say the tarball came from source it did not
+      # come from — so none is made. To attest a rebuild, dispatch it on the
+      # tag itself: `gh workflow run release-please.yml --ref vX.Y.Z -f tag=vX.Y.Z`.
+      - name: Check the attestation would be true
+        id: provenance
+        run: |
+          built=$(git rev-parse HEAD)
+          if [ "$built" = "$GITHUB_SHA" ]; then
+            echo "attest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Built $built but this run is for $GITHUB_SHA; no provenance attestation."
+            echo "attest=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # A checksum says the download is the file that was uploaded; this says
+      # the file was built by this workflow, from this commit. Anyone can
+      # check it with `gh attestation verify <tarball> --repo heroesofcode/lingo`.
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        if: steps.provenance.outputs.attest == 'true'
+        with:
+          subject-path: ${{ steps.package.outputs.tarball }}
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" \
+            lingo-*.tar.gz lingo-*.sha256 --clobber

@@ -1,0 +1,236 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Weekly, against whatever is on main. A newly published advisory, a new
+  # clippy lint on the stable channel, or a dependency yanked upstream all
+  # arrive without a pull request to notice them.
+  schedule:
+    - cron: "23 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+  RUST_BACKTRACE: 1
+
+jobs:
+  # rustfmt, clippy, tests and the release build run the tasks in mise.toml,
+  # the same ones a contributor runs, so the two cannot drift apart. The
+  # other jobs are checks that only CI makes.
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: rustup toolchain install
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - run: mise run rustfmt
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/linux-deps
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - run: mise run clippy
+
+  test:
+    name: tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/linux-deps
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      - run: mise run test
+
+  msrv:
+    name: minimum Rust version
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/linux-deps
+      - run: rustup toolchain install
+      # Read from Cargo.toml rather than written here, so the declaration and
+      # the check cannot disagree.
+      - name: Install the declared minimum
+        id: msrv
+        run: |
+          msrv=$(cargo metadata --no-deps --format-version 1 \
+            | jq -r '[.packages[].rust_version] | unique | if length == 1 then .[0] else error("crates disagree on rust-version: \(.)") end')
+          rustup toolchain install "$msrv" --profile minimal
+          echo "version=$msrv" >> "$GITHUB_OUTPUT"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: msrv-${{ steps.msrv.outputs.version }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Check with the declared minimum
+        env:
+          MSRV: ${{ steps.msrv.outputs.version }}
+        run: cargo "+$MSRV" check --workspace --all-targets --all-features --locked
+
+  docs:
+    name: documentation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/linux-deps
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Broken intra-doc links are how documentation quietly stops matching
+      # the code it describes.
+      - run: cargo doc --workspace --no-deps --document-private-items --locked
+
+  release-build:
+    name: release build
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: $/.github/actions/linux-deps
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
+      # Thin LTO and stripping only happen here. Finding out that they fail
+      # at release time means finding out after the tag exists.
+      - run: mise run build
+
+  supply-chain:
+    name: supply chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: cargo-deny@0.20.2
+      # Advisories, licences, banned and duplicate crates, and where every
+      # dependency comes from. The policy, and the reason for each exception,
+      # is in deny.toml.
+      - run: cargo deny --locked check
+
+  hygiene:
+    name: spelling and unused dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: typos@1.50.3,cargo-machete@0.9.2
+      # The Portuguese words that look like English misspellings are listed
+      # in _typos.toml.
+      - run: typos
+      # An unused dependency is still compiled, still audited, and still code
+      # that runs next to the OpenAI key.
+      - run: cargo machete
+
+  workflows:
+    name: workflow security
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
+        with:
+          tool: zizmor@1.30.1
+      # Template injection, over-broad permissions, unpinned actions and
+      # credentials left on disk. Online, so that a pinned SHA is also
+      # checked to belong to the repository it claims to.
+      - name: zizmor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: zizmor --format=github .github/
+      # Not in install-action, so fetched directly, and checked against a
+      # digest written here rather than one published beside the download.
+      - name: actionlint
+        env:
+          VERSION: 1.7.12
+          SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+        run: |
+          archive="actionlint_${VERSION}_linux_amd64.tar.gz"
+          curl -sSfL -o "$RUNNER_TEMP/$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/${archive}"
+          echo "${SHA256}  $RUNNER_TEMP/$archive" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" actionlint
+          # The `$/` self-repository syntax is newer than this release, which
+          # reads it as a malformed reference. Only that message is ignored;
+          # drop this once https://github.com/rhysd/actionlint/issues/711 ships.
+          "$RUNNER_TEMP/actionlint" -color \
+            -ignore 'specifying action "\$/[^"]+" in invalid format'
+
+  # The status check main requires for the code. Every job above is in
+  # `needs`, so requiring this is requiring all of them, and adding a job here
+  # is the only change needed to make it required too. `always()` matters: a
+  # job skipped because something it needed failed would otherwise report as
+  # passing. The pull request title is the other required check, in
+  # pr-title.yml, for the reason given there.
+  ci:
+    name: ci
+    if: always()
+    needs:
+      - fmt
+      - clippy
+      - test
+      - msrv
+      - docs
+      - release-build
+      - supply-chain
+      - hygiene
+      - workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.value.result)\t\(.key)"' <<<"$RESULTS"
+          jq -e 'all(.[]; .result == "success")' <<<"$RESULTS" >/dev/null
