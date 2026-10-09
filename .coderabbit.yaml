@@ -39,9 +39,13 @@ reviews:
     enabled: true
     drafts: false
     # release-please's own pull requests are a version bump and a changelog
-    # it generated from titles that were already reviewed.
-    ignore_title_keywords:
-      - "chore(main): release"
+    # it generated from titles that were already reviewed. Matched by author,
+    # not by title: a title keyword matches anywhere in the title, so an
+    # ordinary pull request could mention it and skip the review. With
+    # RELEASE_PLEASE_TOKEN set they are opened by its owner instead, and are
+    # reviewed like any other.
+    ignore_usernames:
+      - "github-actions[bot]"
 
   path_filters:
     - "!Cargo.lock"
