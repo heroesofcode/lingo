@@ -7,7 +7,6 @@ description = "Live translation and reply suggestions for calls, on Linux (GTK4 
 license = "MIT"
 
 [dependencies]
-anyhow = "1.0.104"
 async-channel = "2.5.0"
 base64 = "0.23.1"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
