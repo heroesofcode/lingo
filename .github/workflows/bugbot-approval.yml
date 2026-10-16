@@ -1,0 +1,103 @@
+name: bugbot approval
+
+# Bugbot's own check is named "Cursor Bugbot" and is published by the GitHub
+# App "cursor". A clean review concludes `success`. Findings, a run cancelled
+# by a newer one, and an internal error conclude `neutral`, which is the
+# default when it has something to say. GitHub does not treat `neutral` as a
+# failed required check, so requiring "Cursor Bugbot" only proves that Bugbot
+# ran. This job is the check main can require: it fails unless that check
+# concluded `success`, or cursor[bot]'s latest review of this commit is
+# APPROVED.
+#
+# The review state is the weaker signal. A clean Bugbot review is COMMENTED
+# ("found no new issues"), not APPROVED. APPROVED is still accepted because
+# cursor[bot] does submit that state from other Cursor automations.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  checks: read
+  pull-requests: read
+
+concurrency:
+  group: bugbot-approval-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  bugbot-approval:
+    name: bugbot-approval
+    # A draft cannot be merged, and Bugbot skips drafts unless the author
+    # opts in. Waiting here would only fail a pull request that is not
+    # asking to be merged yet. `ready_for_review` runs this job once it is.
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Require a successful Bugbot review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          export LC_ALL=C
+
+          deadline=$((SECONDS + 900))
+
+          while true; do
+            if ! review_line=$(
+              gh api --paginate \
+                "repos/${REPO}/pulls/${PR}/reviews?per_page=100" \
+                --jq '.[] | select(.user.login == "cursor[bot]" and .commit_id == env.SHA) | [.submitted_at, .state] | @tsv' \
+                | sort | tail -n 1
+            ); then
+              echo "Could not list reviews; retrying"
+              review_line=""
+            fi
+            review_state=${review_line##*$'\t'}
+            if [[ -z "$review_line" ]]; then
+              review_state=""
+            fi
+
+            if ! check_line=$(
+              gh api --paginate \
+                "repos/${REPO}/commits/${SHA}/check-runs?per_page=100" \
+                --jq '.check_runs[] | select(.name == "Cursor Bugbot" and .app.slug == "cursor") | [.started_at, .status, (.conclusion // "")] | @tsv' \
+                | sort | tail -n 1
+            ); then
+              echo "Could not list check runs; retrying"
+              check_line=""
+            fi
+
+            started=""
+            status=""
+            conclusion=""
+            if [[ -n "$check_line" ]]; then
+              IFS=$'\t' read -r started status conclusion <<<"$check_line"
+            fi
+
+            if [[ "$review_state" == "APPROVED" ]]; then
+              echo "cursor[bot] approved ${SHA}"
+              exit 0
+            fi
+
+            if [[ "$status" == "completed" ]]; then
+              if [[ "$conclusion" == "success" ]]; then
+                echo "Cursor Bugbot concluded success for ${SHA}"
+                exit 0
+              fi
+              echo "::error::Cursor Bugbot concluded ${conclusion:-unknown} for ${SHA}. success is a clean review. neutral is the default when Bugbot reports findings, and a required Cursor Bugbot check would still allow the merge. Re-run this job after a later run concludes success, or after cursor[bot] approves this commit."
+              exit 1
+            fi
+
+            if (( SECONDS >= deadline )); then
+              echo "::error::No completed Cursor Bugbot check from the cursor app on ${SHA} after 15 minutes, and cursor[bot] has not approved this commit."
+              exit 1
+            fi
+
+            echo "Waiting for Cursor Bugbot on ${SHA} (status: ${status:-not reported})"
+            sleep 20
+          done
