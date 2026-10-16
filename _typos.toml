@@ -1,0 +1,12 @@
+# The interface, the prompts and some comments are in Brazilian Portuguese, and
+# a few Portuguese words are also common misspellings of English ones.
+[default.extend-words]
+caracteres = "caracteres"
+cliente = "cliente"
+eles = "eles"
+erro = "erro"
+exporte = "exporte"
+frase = "frase"
+instale = "instale"
+nomes = "nomes"
+vai = "vai"

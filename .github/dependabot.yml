@@ -1,0 +1,47 @@
+# Dependency updates.
+#
+# Each pull request has to pass the full `ci` check like any other, which
+# includes the minimum-Rust-version job: a bump that raises the toolchain the
+# tree needs fails there instead of quietly falsifying `rust-version`.
+
+version: 2
+
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # A release is not proposed until it has been public for a week. A
+    # malicious or broken version is usually found and yanked inside that
+    # window, and an app that holds an API key gains nothing from being first.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    # One pull request for the routine updates rather than one per crate.
+    # Major versions stay separate: they are the ones worth reading.
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+
+  - package-ecosystem: github-actions
+    directories:
+      - /
+      - /.github/actions/*
+    schedule:
+      interval: weekly
+      day: monday
+    # Actions are pinned to commit SHAs, so this is what moves them forward,
+    # and the same caution applies to what runs inside CI.
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
+      include: scope

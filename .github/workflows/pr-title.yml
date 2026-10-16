@@ -1,0 +1,38 @@
+name: pull request title
+
+# Its own workflow rather than a job in ci.yml, because it has to run again
+# when a title is edited, and `edited` also fires on every change to the
+# description — including the review bot writing its summary there. In
+# ci.yml that would rerun the whole build for a change that cannot affect it.
+# Here it costs a few seconds.
+#
+# `synchronize` keeps the result attached to each new head commit, which is
+# what a required check is evaluated against.
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+
+permissions: {}
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    name: pull request title
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # release-please builds the changelog and the next version from
+      # squash-merged titles, so a title that is not a Conventional Commit is
+      # a release note that silently goes missing.
+      - name: Conventional Commit
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|chore|refactor|perf|test|build|ci|style|revert)(\([a-z0-9-]+\))?!?: [^ ].*$'
+          if [[ ! "$TITLE" =~ $pattern ]]; then
+            echo "::error::'$TITLE' is not a Conventional Commit, e.g. 'fix(ui): keep the hint in the text field'"
+            exit 1
+          fi
